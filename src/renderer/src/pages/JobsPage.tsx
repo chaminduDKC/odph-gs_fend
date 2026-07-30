@@ -375,12 +375,14 @@ export const JobsPage: React.FC = () => {
                   <span className="text-[var(--color-text-secondary)] flex items-center gap-2">
                     Labor Cost
                     <button
-                      onClick={() => { setEditLaborValue(String(Number(jobDetails.laborCost))); setIsEditLaborOpen(true) }}
-                      className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
+                      disabled={jobDetails.paymentStatus !== "DUE"}
+                      onClick={() => { setEditLaborValue(String(Number(jobDetails.laborCost)));  setIsEditLaborOpen(true) }}
+                      className="p-0.5 text-(--color-text-muted) hover:text-(--color-accent) transition-colors cursor-pointer"
                       title="Edit labor cost"
                     >
                       <Pencil size={12} />
                     </button>
+                      {jobDetails.paymentStatus !== "DUE" && <p className='text-red-400'>You cannot change labor cost if the JOB was Paid</p>}
                   </span>
                   <span>Rs. {Number(jobDetails.laborCost).toFixed(2)}</span>
                 </div>
