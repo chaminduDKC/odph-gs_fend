@@ -20,7 +20,11 @@ export const LoginPage: React.FC = () => {
     try {
       await login({ username, password })
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to connect to server. Please check your credentials.')
+      if(err.response.status === 503){
+        setError(err.response.data.error)
+      } else {
+        setError(err.response?.data?.message || 'Failed to connect to server. Please check your credentials.')
+      }
     } finally {
       setIsSubmitting(false)
     }

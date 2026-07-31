@@ -32,6 +32,13 @@ const App: React.FC = () => {
     return <LoadingSpinner fullScreen />
   }
 
+  // if (!isAuthenticated) {
+  //   return (
+  //     <Routes>
+  //       <Route path="*" element={<DashboardPage />} />
+  //     </Routes>
+  //   )
+  // }
   if (!isAuthenticated) {
     return (
       <Routes>

@@ -21,6 +21,7 @@ export const PurchasesPage: React.FC = () => {
 
   // Form State
   const [supplierId, setSupplierId] = useState('')
+  const [purchaseId, setPurchaseId] = useState('')
   const [paymentType, setPaymentType] = useState<PurchaseType>('PAID')
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [amountPaid, setAmountPaid] = useState('0')
@@ -38,6 +39,16 @@ export const PurchasesPage: React.FC = () => {
       closeModal()
     }
   })
+const updatePaymentMutation = useMutation({
+  mutationFn: (vars: { purchaseId: string; amountToPaid: number; supplierId:string }) => 
+    purchasesApi.updatePurchase(vars.purchaseId, vars.amountToPaid, vars.supplierId),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['purchases'] })
+    queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+    closeViewModal()
+  }
+})
 
   const closeModal = () => {
     setIsModalOpen(false)
@@ -59,7 +70,8 @@ export const PurchasesPage: React.FC = () => {
 
   const handleEdit = (row:PurchaseTransaction)=>{
     console.log(row);
-    setSupplierId(row.id)
+    setSupplierId(row.supplierId)
+    setPurchaseId(row.id)
     setPaymentType(row.paymentType)
     setAmountPaid(row.amountPaid)
     setDueDate(row.dueDate)
@@ -106,6 +118,17 @@ export const PurchasesPage: React.FC = () => {
     })
   }
 
+    const handleSubmitUpdate = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    
+    updatePaymentMutation.mutate({
+      purchaseId: purchaseId,       
+      amountToPaid: Number(amountToPaid),
+      supplierId:supplierId
+    })
+  }
+
   const columns: Column<PurchaseTransaction>[] = [
     { header: 'Date', accessorFn: (row) => new Date(row.createdAt).toLocaleDateString('en-LK') },
     { header: 'Supplier', accessorFn: (row) => row.supplier?.name || '-' },
@@ -137,15 +160,15 @@ export const PurchasesPage: React.FC = () => {
         }
       />
       <Modal isOpen={isViewOpen} onClose={closeViewModal} title='Edit Credit Details'>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmitUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className='text-left'>
               <div className="text-xs text-[var(--color-text-secondary)]">Total Amount</div>
-              <div className="text-xl font-bold text-[var(--color-accent)]">Rs. {totalPayment.toFixed(2)}</div>
+              <div className="text-xl font-bold text-[var(--color-accent)]">Rs. {totalPayment.toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
             </div>
             <div className='text-right'>
               <div className="text-xs text-[var(--color-text-secondary)]">Amount Due</div>
-              <div className="text-xl font-bold text-[var(--color-accent)]">Rs. {(totalPayment - Number(amountPaid)).toFixed(2)}</div>
+              <div className="text-xl font-bold text-red-500">Rs. {(totalPayment - Number(amountPaid)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
             </div>
               
           </div>

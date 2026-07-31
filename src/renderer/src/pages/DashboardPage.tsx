@@ -1,6 +1,6 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { DollarSign, Clock, AlertTriangle, Users, FileText, Wrench } from 'lucide-react'
+import { DollarSign, Clock, AlertTriangle, Users, FileText, Wrench, Bike, CogIcon, Currency } from 'lucide-react'
 import { dashboardApi } from '../api/dashboard'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
@@ -57,12 +57,15 @@ export const DashboardPage: React.FC = () => {
             <div className="p-2 rounded-lg bg-green-500/10">
               <DollarSign size={20} className="text-green-500" />
             </div>
-            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Today's Revenue</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Today's Job Revenue</span>
           </div>
           <p className="text-3xl font-bold text-white">
-            Rs. {Number(data.todayRevenue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            Rs. {Number(data.revenueBreakdown.jobRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}
           </p>
-          {data.revenueBreakdown && (
+          {/* <p className="text-3xl font-bold text-white">
+            Rs. {Number(data.todayRevenue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p> */}
+          {/* {data.revenueBreakdown && (
             <div className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-3 mt-1">
               <div className="flex justify-between text-xs text-[var(--color-text-muted)]">
                 <span>🔧 Jobs (PAID)</span>
@@ -77,21 +80,21 @@ export const DashboardPage: React.FC = () => {
                 <span className="text-white font-medium">Rs. {Number(data.revenueBreakdown.bicycleRevenue).toFixed(2)}</span>
               </div>
             </div>
-          )}
+          )} */}
         </div>
 
         <StatCard 
-          title="Bike Sales" 
+          title="Today Bike Sales" 
           value={Number(data.revenueBreakdown.bicycleRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
-          icon={ Wrench } 
+          icon={ Bike } 
           colorClass="text-blue-500" 
         />
 
         <StatCard 
-          title="Part Sales" 
+          title="Today Part Sales" 
           value={Number(data.revenueBreakdown.partsRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
-          icon={ Wrench } 
-          colorClass="text-blue-500" 
+          icon={ CogIcon } 
+          colorClass="text-white-500" 
         />
 
         <StatCard 

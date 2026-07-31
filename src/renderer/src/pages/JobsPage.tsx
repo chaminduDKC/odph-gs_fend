@@ -279,8 +279,8 @@ export const JobsPage: React.FC = () => {
                           jobDetails.paymentStatus === st
                             ? 'border-green-500 bg-green-500/20 text-green-400 cursor-default'
                             : st === 'PAID'
-                            ? 'border-green-600 text-green-400 hover:bg-green-500/20'
-                            : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-white'
+                            ? 'border-green-600 text-green-400 hover:bg-green-500/20 cursor-pointer'
+                            : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-white cursor-pointer'
                         }`}
                       >
                         {st === 'PAID' ? '✓ Mark PAID' : st === 'PARTIAL' ? '½ Partial' : 'DUE'}
