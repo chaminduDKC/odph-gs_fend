@@ -13,7 +13,10 @@ export const PaysheetPage: React.FC = () => {
   const [month, setMonth] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
   const [workerId, setWorkerId] = useState('')
 
-  const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: () => workersApi.listWorkers() })
+  const { data: workers = [] } = useQuery({
+    queryKey: ['workers', 'all'],
+    queryFn: async () => (await workersApi.listWorkers(undefined, 1, 1000)).data
+  })
 
   const { data: salaryData, isLoading, isError } = useQuery({
     queryKey: ['salary-get', workerId, month],
@@ -24,24 +27,27 @@ export const PaysheetPage: React.FC = () => {
 
   const [isDownloading, setIsDownloading] = useState(false)
 
-  const handleDownload = async () => {
-    if (!workerId || !month) return
-    try {
-      setIsDownloading(true)
-      const blob = await paysheetApi.downloadPaysheet(workerId, month)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `payslip_${workerId}_${month}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-    } catch (err) {
-      alert('Failed to download payslip.')
-    } finally {
-      setIsDownloading(false)
+const handleDownload = async () => {
+  if (!workerId || !month) return
+  try {
+    setIsDownloading(true)
+    const blob = await paysheetApi.downloadPaysheet(workerId, month)
+    const arrayBuffer = await blob.arrayBuffer()
+
+    const fileName = `payslip_${workerId}_${month}.pdf`
+    const subFolder = "payslips"
+    const result = await window.api.pdf.savePdfAndOpen(fileName, arrayBuffer, subFolder)
+
+    if (!result.success) {
+      console.log(result.error)
+      return
     }
+  } catch (err) {
+    console.log(err)
+  } finally {
+    setIsDownloading(false)
   }
+}
 
   return (
     <div className="animate-fade-in max-w-3xl mx-auto">

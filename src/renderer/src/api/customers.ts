@@ -1,10 +1,11 @@
 import { apiClient } from './client'
-import type { Customer, CreateCustomerRequest, Vehicle } from '@shared/types'
+import type { Customer, CreateCustomerRequest, Vehicle, PaginatedResponse } from '@shared/types'
 
 export const customersApi = {
-  listCustomers: async (search?: string): Promise<Customer[]> => {
-    const params = search ? { search } : undefined
-    const response = await apiClient.get<Customer[]>('/customers', { params })
+  listCustomers: async (search?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<Customer>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (search) params.search = search
+    const response = await apiClient.get<PaginatedResponse<Customer>>('/customers', { params })
     return response.data
   },
 
@@ -24,7 +25,8 @@ export const customersApi = {
   },
 
   deleteCustomer: async (id: string): Promise<void> => {
-    await apiClient.delete(`/customers/${id}`)
+    const response = await apiClient.delete(`/customers/${id}`)
+    return response.data;
   },
 
   getCustomerVehicles: async (id: string): Promise<Vehicle[]> => {

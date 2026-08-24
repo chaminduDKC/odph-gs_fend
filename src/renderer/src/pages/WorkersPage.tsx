@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { workersApi } from '../api/workers'
@@ -8,11 +8,13 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { Worker, SalaryType } from '@shared/types'
 
 export const WorkersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
@@ -26,10 +28,23 @@ export const WorkersPage: React.FC = () => {
   const [baseRate, setBaseRate] = useState('0')
   const [active, setActive] = useState(true)
 
-  const { data: workers = [], isLoading } = useQuery({
-    queryKey: ['workers', search],
-    queryFn: () => workersApi.listWorkers(search)
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const { data: workerData, isLoading } = useQuery({
+    queryKey: ['workers', search, page],
+    queryFn: () => workersApi.listWorkers(search, page)
   })
+
+  useEffect(() => {
+    if (workerData && page < workerData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['workers', search, page + 1],
+        queryFn: () => workersApi.listWorkers(search, page + 1)
+      })
+    }
+  }, [workerData, page, search, queryClient])
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editingWorker 
@@ -130,7 +145,15 @@ export const WorkersPage: React.FC = () => {
         <SearchInput value={search} onChange={setSearch} placeholder="Search workers..." />
       </div>
 
-      <DataTable data={workers} columns={columns} isLoading={isLoading} />
+      <DataTable data={workerData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={workerData?.totalPages ?? 1}
+        total={workerData?.total}
+        pageSize={workerData?.pageSize}
+        onPageChange={setPage}
+      />
 
       <Modal 
         isOpen={isModalOpen} 
@@ -138,7 +161,7 @@ export const WorkersPage: React.FC = () => {
         title={editingWorker ? "Edit Worker" : "Add Worker"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Full Name" required value={name} onChange={e => setName(e.target.value)} />
+          <FormField autoFocus label="Full Name" required value={name} onChange={e => setName(e.target.value)} />
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Contact" value={contact} onChange={e => setContact(e.target.value)} />
             <FormField label="Role / Job Title" value={role} onChange={e => setRole(e.target.value)} />
@@ -153,7 +176,7 @@ export const WorkersPage: React.FC = () => {
             </FormField>
           </div>
           
-          <FormField label={`Base Rate (Rs. per ${salaryType === 'DAILY' ? 'day' : salaryType === 'HOURLY' ? 'hour' : 'month'})`} type="number" required min="0" value={baseRate} onChange={e => setBaseRate(e.target.value)} />
+          <FormField disabled label={`Base Rate (Rs. per ${salaryType === 'DAILY' ? 'day' : salaryType === 'HOURLY' ? 'hour' : 'month'})`} type="number" required min="0" value={baseRate} onChange={e => setBaseRate(e.target.value)} />
 
           {editingWorker && (
             <label className="flex items-center gap-2 mt-4 cursor-pointer">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Eye, Download, ShieldCheck, Trash2, CheckCircle2, CreditCard, Pencil } from 'lucide-react'
 import { jobsApi } from '../api/jobs'
@@ -10,18 +10,25 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
+import { Pagination } from '../components/Pagination'
 import { Job, JobStatus, PaymentStatus } from '@shared/types'
+import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
+import { isAxiosError } from 'axios'
+import { MessageDialog } from '@renderer/components/MessageDialog'
 
 export const JobsPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [filterStatus, setFilterStatus] = useState<JobStatus | ''>('')
+  const [page, setPage] = useState(1)
   
   // Modals state
   const [isNewOpen, setIsNewOpen] = useState(false)
   const [viewJobId, setViewJobId] = useState<string | null>(null)
   
+  const [downloading, setDownloading] = useState(false)
   // Form State
   const [vehicleId, setVehicleId] = useState('')
+  const [deletingId, setDeletingId] = useState('')
   const [description, setDescription] = useState('')
   const [laborCost, setLaborCost] = useState('0')
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
@@ -33,15 +40,38 @@ export const JobsPage: React.FC = () => {
   // Edit Labor Cost State
   const [isEditLaborOpen, setIsEditLaborOpen] = useState(false)
   const [editLaborValue, setEditLaborValue] = useState('0')
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
 
-  const { data: jobs = [], isLoading } = useQuery({
-    queryKey: ['jobs', filterStatus],
-    queryFn: () => jobsApi.listJobs(filterStatus as JobStatus || undefined)
+  useEffect(() => {
+    setPage(1)
+  }, [filterStatus])
+
+  const { data: jobData, isLoading } = useQuery({
+    queryKey: ['jobs', filterStatus, page],
+    queryFn: () => jobsApi.listJobs(filterStatus as JobStatus || undefined, page)
   })
 
-  const { data: vehicles = [] } = useQuery({ queryKey: ['vehicles'], queryFn: () => vehiclesApi.listVehicles() })
-  const { data: workers = [] } = useQuery({ queryKey: ['workers'], queryFn: () => workersApi.listWorkers() })
-  const { data: items = [] } = useQuery({ queryKey: ['inventory'], queryFn: () => inventoryApi.listItems() })
+  useEffect(() => {
+    if (jobData && page < jobData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['jobs', filterStatus, page + 1],
+        queryFn: () => jobsApi.listJobs(filterStatus as JobStatus || undefined, page + 1)
+      })
+    }
+  }, [jobData, page, filterStatus, queryClient])
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['vehicles', 'all'],
+    queryFn: async () => (await vehiclesApi.listVehicles(undefined, 1, 1000)).data
+  })
+  const { data: workers = [] } = useQuery({
+    queryKey: ['workers', 'all'],
+    queryFn: async () => (await workersApi.listWorkers(undefined, 1, 1000)).data
+  })
+  const { data: items = [] } = useQuery({
+    queryKey: ['inventory', 'all'],
+    queryFn: async () => (await inventoryApi.listItems(undefined, undefined, 1, 1000)).data
+  })
 
   const { data: jobDetails } = useQuery({
     queryKey: ['job', viewJobId],
@@ -49,10 +79,17 @@ export const JobsPage: React.FC = () => {
     enabled: !!viewJobId
   })
 
+  if(jobDetails){
+    console.log(jobDetails);
+    
+  }
+
   const createMutation = useMutation({
     mutationFn: jobsApi.createJob,
     onSuccess: () => {
+      
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setIsNewOpen(false)
       resetForm()
     }
@@ -63,6 +100,7 @@ export const JobsPage: React.FC = () => {
       jobsApi.updateJobStatus(data.id, data.status, data.paymentStatus),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['job', viewJobId] })
     }
   })
@@ -73,6 +111,7 @@ export const JobsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job', viewJobId] })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setPartItemId('')
       setPartQty('1')
     }
@@ -84,6 +123,7 @@ export const JobsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job', viewJobId] })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     }
   })
 
@@ -93,6 +133,7 @@ export const JobsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job', viewJobId] })
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setIsEditLaborOpen(false)
     }
   })
@@ -116,18 +157,43 @@ export const JobsPage: React.FC = () => {
 
   const downloadInvoice = async (id: string) => {
     try {
+      setDownloading(true)
       const blob = await jobsApi.downloadInvoice(id)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `invoice_${id}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      const fileName = `job_invoice_${id}.pdf`
+      const subFolder = "invoices"
+      const result = await window.api.pdf.savePdfAndOpen(fileName, arrayBuffer, subFolder)
+      
+      
+      if (!result.success) {
+        console.log(result.error)
+      setDownloading(false)
+      return
+    }
+     
     } catch (err) {
       console.error('Failed to download invoice', err)
     }
+    finally{
+      setDownloading(false)
+    }
   }
+
+  const deleteMutation = useMutation({
+    mutationFn:jobsApi.deleteJob,
+    onSuccess: ()=>{
+       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setDeletingId("")
+    },
+    onError(error:unknown){
+      if(isAxiosError(error)){
+        console.log(error.response?.data)
+        setMessageDialog({ type: 'error', title: 'Cannot Delete', message: error.response?.data.message })
+      }
+    }
+  })
 
   const columns: Column<Job>[] = [
     { header: 'Job Number', accessorKey: 'jobNumber' },
@@ -136,16 +202,22 @@ export const JobsPage: React.FC = () => {
     { header: 'Job', accessorFn: (row) => `${row.description}` },
     { header: 'Status', cell: ({ row }) => <StatusBadge status={row.status} type="job" /> },
     { header: 'Payment', cell: ({ row }) => <StatusBadge status={row.paymentStatus} type="payment" /> },
-    { header: 'Total', accessorFn: (row) => `Rs. ${Number(row.totalBill).toFixed(2)}` },
+    { header: 'Total', accessorFn: (row) => `Rs. ${Number(row.totalBill).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}` },
     {
       header: 'Actions',
       cell: ({ row }) => (
+        <div className="flex gap-2">
+
         <button 
           className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20 flex items-center gap-1"
           onClick={() => setViewJobId(row.id)}
-        >
-          <Eye size={16} /> <span className="text-xs font-medium">View</span>
+          >
+          <Eye size={16} />
         </button>
+        <button className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 flex items-center gap-1" onClick={()=> setDeletingId(row.id)}>
+           <Trash2 size={16} /> 
+        </button>
+          </div>
       )
     }
   ]
@@ -185,12 +257,20 @@ export const JobsPage: React.FC = () => {
         ))}
       </div>
 
-      <DataTable data={jobs} columns={columns} isLoading={isLoading} />
+      <DataTable data={jobData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={jobData?.totalPages ?? 1}
+        total={jobData?.total}
+        pageSize={jobData?.pageSize}
+        onPageChange={setPage}
+      />
 
       {/* New Job Modal */}
       <Modal isOpen={isNewOpen} onClose={() => setIsNewOpen(false)} title="Create New Job">
         <form onSubmit={handleCreateSubmit} className="space-y-4">
-          <FormField label="Vehicle" as="select" required value={vehicleId} onChange={e => setVehicleId(e.target.value)}>
+          <FormField autoFocus label="Vehicle" as="select" required value={vehicleId} onChange={e => setVehicleId(e.target.value)}>
             <option value="">Select a vehicle...</option>
             {vehicles.map(v => (
               <option key={v.id} value={v.id}>{v.regNumber} - {v.make} {v.model}</option>
@@ -251,13 +331,14 @@ export const JobsPage: React.FC = () => {
                       <button
                         key={st}
                         disabled={jobDetails.status === st || statusMutation.isPending}
-                        onClick={() => statusMutation.mutate({ id: jobDetails.id, status: st })}
+                        onClick={() => {statusMutation.mutate({ id: jobDetails.id, status: st })}}
                         className={`text-xs px-2 py-1 rounded border transition-colors ${
                           jobDetails.status === st
                             ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20 text-[var(--color-accent)] cursor-default'
                             : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-white'
                         }`}
                       >
+                     
                         {st === 'IN_PROGRESS' ? 'In Progress' : st.charAt(0) + st.slice(1).toLowerCase()}
                       </button>
                     ))}
@@ -283,17 +364,45 @@ export const JobsPage: React.FC = () => {
                             : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-white cursor-pointer'
                         }`}
                       >
+                        
                         {st === 'PAID' ? '✓ Mark PAID' : st === 'PARTIAL' ? '½ Partial' : 'DUE'}
                       </button>
                     ))}
                   </div>
+                  
                 </div>
               </div>
             </div>
 
-            <div className="card p-4">
-              <h4 className="font-semibold mb-2">Description</h4>
-              <p className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] p-3 rounded">{jobDetails.description}</p>
+            <ConfirmDialog isOpen={statusMutation.isPending } message='Job Status is Updating... ' title='Please Wait' onClose={()=> {}} onConfirm={()=> {}}  isLoading={statusMutation.isPending}/>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="card p-4">
+                <h4 className="font-semibold mb-2">Description</h4>
+                <p className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] p-3 rounded">
+                  {jobDetails.description}
+                </p>
+              </div>
+
+              <div className="card p-4">
+                <h4 className="font-semibold mb-2">Assigned Workers</h4>
+                {jobDetails.workers && jobDetails.workers.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {jobDetails.workers.map((w: any, i: number) => (
+                      <p
+                        key={w.workerId ?? i}
+                        className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] p-3 rounded"
+                      >
+                        {w.worker.name}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] p-3 rounded">
+                    No workers Assigned
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="card p-0 overflow-hidden">
@@ -313,16 +422,16 @@ export const JobsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {jobDetails.parts && jobDetails.parts.map(part => (
+                      {jobDetails.parts && jobDetails.parts.map((part:any) => (
                         <tr key={part.id} className="border-b border-[var(--color-border)]/50 hover:bg-white/5">
                           <td className="py-2">{part.item?.name || 'Unknown Item'}</td>
                           <td className="py-2 text-right">{part.quantity}</td>
-                          <td className="py-2 text-right">Rs. {Number(part.unitPriceSnapshot).toFixed(2)}</td>
-                          <td className="py-2 text-right">Rs. {(part.quantity * Number(part.unitPriceSnapshot)).toFixed(2)}</td>
+                          <td className="py-2 text-right">Rs. {Number(part.unitPriceSnapshot).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                          <td className="py-2 text-right">Rs. {(part.quantity * Number(part.unitPriceSnapshot)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                           <td className="py-2 text-right">
                             <button
                               onClick={() => removePartMutation.mutate({ jobId: jobDetails.id, partId: part.id })}
-                              disabled={removePartMutation.isPending}
+                              disabled={removePartMutation.isPending || addPartMutation.isPending || jobDetails.paymentStatus !== "DUE"}
                               className="p-1 text-red-400 hover:bg-red-500/20 rounded transition-colors"
                               title="Remove part"
                             >
@@ -365,7 +474,8 @@ export const JobsPage: React.FC = () => {
                       className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:border-[var(--color-accent)] outline-none"
                     />
                   </div>
-                  <button type="submit" disabled={addPartMutation.isPending} className="btn btn-primary py-1.5 px-3 h-[34px]">
+
+                  <button type="submit" disabled={addPartMutation.isPending || jobDetails.paymentStatus !== "DUE"} className="btn btn-primary py-1.5 px-3 h-[34px]">
                     <Plus size={16} /> Add
                   </button>
                 </form>
@@ -382,13 +492,17 @@ export const JobsPage: React.FC = () => {
                     >
                       <Pencil size={12} />
                     </button>
-                      {jobDetails.paymentStatus !== "DUE" && <p className='text-red-400'>You cannot change labor cost if the JOB was Paid</p>}
+                      {jobDetails.paymentStatus !== "DUE" && <p className='text-red-400'>You cannot change labor cost or add parts if the JOB was Paid</p>}
                   </span>
-                  <span>Rs. {Number(jobDetails.laborCost).toFixed(2)}</span>
+                  <span>Rs. {Number(jobDetails.laborCost).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mb-1 text-[var(--color-text-secondary)]">
                   <span>Parts Subtotal</span>
-                  <span>Rs. {(jobDetails.parts || []).reduce((s, p) => s + p.quantity * Number(p.unitPriceSnapshot), 0).toFixed(2)}</span>
+                  <span>Rs. {(jobDetails.parts || []).reduce((s, p) => s + p.quantity * Number(p.unitPriceSnapshot), 0).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mb-1 text-[var(--color-success)]">
+                  <span>Parts Profit</span>
+                  <span>Rs. {(Number((jobDetails.parts || []).reduce((s, p) => s + p.quantity * Number(p.sellingPriceSnapshot), 0)) - Number((jobDetails.parts || []).reduce((s, p) => s + p.quantity * Number(p.unitPriceSnapshot), 0))).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                 </div>
                 <div className="flex justify-between items-center font-bold text-lg text-[var(--color-accent)] mt-2 pt-2 border-t border-[var(--color-border)]">
                   <span>Total Bill</span>
@@ -399,8 +513,8 @@ export const JobsPage: React.FC = () => {
 
             <div className="flex justify-end gap-3 mt-6 border-t border-[var(--color-border)] pt-4">
               <button className="btn btn-secondary" onClick={() => setViewJobId(null)}>Close</button>
-              <button className="btn btn-primary" onClick={() => downloadInvoice(jobDetails.id)}>
-                <Download size={18} /> Download Invoice
+              <button disabled={downloading} className="btn btn-primary" onClick={() => downloadInvoice(jobDetails.id)}>
+                <Download size={18} /> {downloading ? "Downloading" : "Download invoice"}
               </button>
             </div>
           </div>
@@ -430,6 +544,24 @@ export const JobsPage: React.FC = () => {
           </form>
         )}
       </Modal>
+        {messageDialog && (
+                    <MessageDialog
+                      isOpen={true}
+                      onClose={() => setMessageDialog(null)}
+                      type={messageDialog.type}
+                      title={messageDialog.title}
+                      message={messageDialog.message}
+                    />
+                  )}
+
+       <ConfirmDialog
+              isOpen={!!deletingId}
+              onClose={() => setDeletingId("")}
+              onConfirm={() => deletingId && deleteMutation.mutate(deletingId)}
+              title="Delete Vehicle"
+              message="Are you sure you want to delete this Job? Job's revenue will be deducted from the Revenue Record. This action cannot be undone."
+              isLoading={deleteMutation.isPending}
+            />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+// src/preload/index.ts
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -14,8 +15,26 @@ export type ElectronAPI = {
   platform: string
 }
 
+const api = {
+  pdf: {
+    savePdfAndOpen: (fileName: string, buffer: ArrayBuffer, subFolder:string) =>
+      ipcRenderer.invoke('pdf:save-pdf-and-open', { fileName, buffer, subFolder }) as Promise<{
+        success: boolean
+        data?: { filePath: string }
+        error?: string
+      }>,
+  },
+ 
+}
+
+export type Api = typeof api
+
+contextBridge.exposeInMainWorld('api', api)
+
+// One single declare global for BOTH bridges
 declare global {
   interface Window {
     electronAPI: ElectronAPI
+    api: Api
   }
 }

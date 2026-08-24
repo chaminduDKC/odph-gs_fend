@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react'
 import { inventoryApi } from '../api/inventory'
@@ -9,11 +9,13 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { InventoryItem } from '@shared/types'
 
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
@@ -28,12 +30,28 @@ export const InventoryPage: React.FC = () => {
   const [reorderLevel, setReorderLevel] = useState('5')
   const [supplierId, setSupplierId] = useState('')
 
-  const { data: allItems = [], isLoading } = useQuery({
-    queryKey: ['inventory', search],
-    queryFn: () => inventoryApi.listItems(search)
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const { data: inventoryData, isLoading } = useQuery({
+    queryKey: ['inventory', search, page],
+    queryFn: () => inventoryApi.listItems(search, undefined, page)
   })
 
-  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: () => suppliersApi.listSuppliers() })
+  useEffect(() => {
+    if (inventoryData && page < inventoryData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['inventory', search, page + 1],
+        queryFn: () => inventoryApi.listItems(search, undefined, page + 1)
+      })
+    }
+  }, [inventoryData, page, search, queryClient])
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers', 'all'],
+    queryFn: async () => (await suppliersApi.listSuppliers(undefined, 1, 1000)).data
+  })
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => editingItem 
@@ -50,6 +68,7 @@ export const InventoryPage: React.FC = () => {
     mutationFn: inventoryApi.deleteItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       setDeleteId(null)
     }
   })
@@ -89,9 +108,10 @@ export const InventoryPage: React.FC = () => {
     })
   }
 
+  const items = inventoryData?.data ?? []
   const displayedItems = showLowStockOnly 
-    ? allItems.filter(i => i.quantity <= i.reorderLevel)
-    : allItems
+    ? items.filter(i => i.quantity <= i.reorderLevel)
+    : items
 
   const columns: Column<InventoryItem>[] = [
     { header: 'Name', accessorKey: 'name' },
@@ -150,17 +170,25 @@ export const InventoryPage: React.FC = () => {
 
       <DataTable data={displayedItems} columns={columns} isLoading={isLoading} />
 
+      <Pagination
+        page={page}
+        totalPages={inventoryData?.totalPages ?? 1}
+        total={inventoryData?.total}
+        pageSize={inventoryData?.pageSize}
+        onPageChange={setPage}
+      />
+
       <Modal 
         isOpen={isModalOpen} 
         onClose={closeModal} 
         title={editingItem ? "Edit Item" : "Add Item"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Item Name" required value={name} onChange={e => setName(e.target.value)} />
+          <FormField autoFocus label="Item Name" required value={name} onChange={e => setName(e.target.value)} />
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Category (Optional)" value={category} onChange={e => setCategory(e.target.value)} />
-            <FormField label="Quantity" value={quantity} onChange={e => setQuantity(e.target.value)} />
+            <FormField required label="Quantity" type='number' value={quantity} onChange={e => setQuantity(e.target.value)} />
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -172,7 +200,7 @@ export const InventoryPage: React.FC = () => {
             <FormField label="Reorder Level" type="number" required min="0" value={reorderLevel} onChange={e => setReorderLevel(e.target.value)} />
             <FormField label="Preferred Supplier" as="select" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
               <option value="">None</option>
-              {suppliers.map(s => (
+              {suppliers.map((s:any) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </FormField>
@@ -180,7 +208,7 @@ export const InventoryPage: React.FC = () => {
 
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending || !name.trim() || !category.trim() || unitCost === "0" || sellingPrice === "0" || quantity === "0" || !quantity || !sellingPrice || !unitCost}>
               {saveMutation.isPending ? 'Saving...' : 'Save Item'}
             </button>
           </div>

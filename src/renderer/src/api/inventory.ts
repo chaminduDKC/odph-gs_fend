@@ -1,13 +1,13 @@
 import { apiClient } from './client'
-import type { InventoryItem, CreateInventoryItemRequest } from '@shared/types'
+import type { InventoryItem, CreateInventoryItemRequest, PaginatedResponse } from '@shared/types'
 
 export const inventoryApi = {
-  listItems: async (search?: string, category?: string): Promise<InventoryItem[]> => {
-    const params: Record<string, string> = {}
+  listItems: async (search?: string, category?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<InventoryItem>> => {
+    const params: Record<string, unknown> = { page, pageSize }
     if (search) params.search = search
     if (category) params.category = category
-    
-    const response = await apiClient.get<InventoryItem[]>('/inventory', { params })
+
+    const response = await apiClient.get<PaginatedResponse<InventoryItem>>('/inventory', { params })
     return response.data
   },
 

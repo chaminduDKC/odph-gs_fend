@@ -1,10 +1,11 @@
 import { apiClient } from './client'
-import type { Worker, CreateWorkerRequest } from '@shared/types'
+import type { Worker, CreateWorkerRequest, PaginatedResponse } from '@shared/types'
 
 export const workersApi = {
-  listWorkers: async (search?: string): Promise<Worker[]> => {
-    const params = search ? { search } : undefined
-    const response = await apiClient.get<Worker[]>('/workers', { params })
+  listWorkers: async (search?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<Worker>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (search) params.search = search
+    const response = await apiClient.get<PaginatedResponse<Worker>>('/workers', { params })
     return response.data
   },
 

@@ -33,8 +33,8 @@ export const AttendancePage: React.FC = () => {
   const [isDirty, setIsDirty] = useState(false)
 
   const { data: workers = [], isLoading: workersLoading } = useQuery({ 
-    queryKey: ['workers'], 
-    queryFn: () => workersApi.listWorkers() 
+    queryKey: ['workers', 'all'], 
+    queryFn: async () => (await workersApi.listWorkers(undefined, 1, 1000)).data 
   })
 
   const { data: attendanceData = [], isLoading: attendanceLoading, isSuccess } = useQuery({

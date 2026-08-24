@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Wrench, Eye, EyeOff, CheckCircle, User, Lock } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { ErrorMessage } from '../components/ErrorMessage'
+import LOGO from '../../../../build/icon.ico'
 
 export const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('')
@@ -11,6 +12,7 @@ export const LoginPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const login = useAuthStore(state => state.login)
+  const year = new Date().getFullYear();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,6 +22,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login({ username, password })
     } catch (err: any) {
+      console.log(err)
       if(err.response.status === 503){
         setError(err.response.data.error)
       } else {
@@ -56,7 +59,8 @@ export const LoginPage: React.FC = () => {
 
           <div className="flex items-center gap-4 mb-8">
             <div className="w-16 h-16 bg-[var(--color-accent)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--color-accent)]/20">
-              <Wrench size={32} className="text-white" />
+             
+              <img src={LOGO} alt="logo" className='rounded-xl' />
             </div>
             <div>
               <h1 className="text-5xl font-black text-white tracking-tight leading-none">ODPH</h1>
@@ -167,7 +171,7 @@ export const LoginPage: React.FC = () => {
             <div className="mt-8 pt-6 border-t border-[var(--color-border)] flex items-center justify-center gap-2">
               <span className="status-dot status-dot-sm" />
               <span className="mono text-xs text-center text-[var(--color-text-muted)]">
-                ODPH Desktop Client v1.0.0 &copy; 2026 Developed By
+                ODPH Desktop Client v1.0.0 &copy; {year} Developed By
               </span>
             </div>
           </div>

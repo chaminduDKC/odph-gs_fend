@@ -13,11 +13,13 @@ export const DashboardPage: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: dashboardApi.getDashboardStats
+    
   })
-
+  
   if (isLoading) return <LoadingSpinner />
-  if (error) return <div className="text-red-500">Failed to load dashboard</div>
+  if (error) return <div className="text-red-500">Failed to load dashboard. Check internet and press Ctrl+r</div>
   if (!data) return null
+  
 
   const jobColumns: Column<Job>[] = [
     { header: 'Job No', accessorKey: 'jobNumber' },
@@ -52,15 +54,15 @@ export const DashboardPage: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Revenue card with breakdown */}
-        <div className="card border border-[var(--color-border)] bg-[var(--color-bg-card)] p-5 rounded-xl flex flex-col gap-3 shadow-md">
+        <div className="card border border-[var(--color-border)] bg-[var(--color-bg-card)] p-5 rounded flex flex-col gap-3 shadow-md">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-green-500/10">
               <DollarSign size={20} className="text-green-500" />
             </div>
-            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Today's Job Revenue</span>
+            <span className="text-sm font-medium text-[var(--color-text-secondary)]">Today's Job Revenue (Repaired Vehicles)</span>
           </div>
           <p className="text-3xl font-bold text-white">
-            Rs. {Number(data.revenueBreakdown.jobRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}
+            Rs. {(Number(data.revenueBreakdown.jobRevenue)- Number(data.totalCostForAttachedParts)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}
           </p>
           {/* <p className="text-3xl font-bold text-white">
             Rs. {Number(data.todayRevenue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -87,6 +89,12 @@ export const DashboardPage: React.FC = () => {
           title="Today Bike Sales" 
           value={Number(data.revenueBreakdown.bicycleRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
           icon={ Bike } 
+          colorClass="text-blue-500" 
+        />
+        <StatCard 
+          title="Attached Parts Revenue (Repaired Vehicles)" 
+          value={Number(data.totalCostForAttachedParts).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
+          icon={ Wrench } 
           colorClass="text-blue-500" 
         />
 

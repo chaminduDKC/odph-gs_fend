@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Eye, Trash2 } from 'lucide-react'
 import { purchasesApi } from '../api/purchases'
@@ -9,25 +9,55 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
+import { Pagination } from '../components/Pagination'
 import { PurchaseTransaction, PurchaseType, PurchaseItem } from '@shared/types'
+import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
+import { p } from 'framer-motion/client'
 
 export const PurchasesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [page, setPage] = useState(1)
   
-  const { data: purchases = [], isLoading } = useQuery({ queryKey: ['purchases'], queryFn: purchasesApi.listPurchases })
-  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.listSuppliers })
-  const { data: items = [] } = useQuery({ queryKey: ['inventory'], queryFn: () => inventoryApi.listItems() })
+  const { data: purchaseData, isLoading } = useQuery({
+    queryKey: ['purchases', page],
+    queryFn: () => purchasesApi.listPurchases(page)
+  })
+
+  useEffect(() => {
+    if (purchaseData && page < purchaseData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['purchases', page + 1],
+        queryFn: () => purchasesApi.listPurchases(page + 1)
+      })
+    }
+  }, [purchaseData, page, queryClient])
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers', 'all'],
+    queryFn: async () => (await suppliersApi.listSuppliers(undefined, 1, 1000)).data
+  })
+  const { data: items = [] } = useQuery({
+    queryKey: ['inventory', 'all'],
+    queryFn: async () => (await inventoryApi.listItems(undefined, undefined, 1, 1000)).data
+  })
 
   // Form State
   const [supplierId, setSupplierId] = useState('')
   const [purchaseId, setPurchaseId] = useState('')
-  const [paymentType, setPaymentType] = useState<PurchaseType>('PAID')
+  const [paymentType, setPaymentType] = useState<PurchaseType>('CREDIT')
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [amountPaid, setAmountPaid] = useState('0')
   const [amountToPaid, setAmountToPaid] = useState('0')
   const [totalPayment, setTotalPayment] = useState(0)
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(() => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+})
+  const [deletingId, setDeletingId] = useState('')
   const [lineItems, setLineItems] = useState<{ id: string; itemId: string; quantity: number; unitCost: number }[]>([])
 
   const createMutation = useMutation({
@@ -53,7 +83,7 @@ const updatePaymentMutation = useMutation({
   const closeModal = () => {
     setIsModalOpen(false)
     setSupplierId('')
-    setPaymentType('PAID')
+    setPaymentType('CREDIT')
     setAmountPaid('0')
     setDueDate('')
     setLineItems([])
@@ -61,7 +91,7 @@ const updatePaymentMutation = useMutation({
   const closeViewModal = () => {
     setIsViewOpen(false)
     setSupplierId('')
-    setPaymentType('PAID')
+    setPaymentType('CREDIT')
     setAmountPaid('0')
     setDueDate('')
     setLineItems([])
@@ -128,6 +158,9 @@ const updatePaymentMutation = useMutation({
       supplierId:supplierId
     })
   }
+  const deleteMutation = useMutation({
+    mutationFn:purchasesApi.deletePurchase
+  })
 
   const columns: Column<PurchaseTransaction>[] = [
     { header: 'Date', accessorFn: (row) => new Date(row.createdAt).toLocaleDateString('en-LK') },
@@ -135,14 +168,14 @@ const updatePaymentMutation = useMutation({
     { header: 'Total', accessorFn: (row) => `Rs. ${Number(row.total).toFixed(2)}` },
     { header: 'Payment', cell: ({ row }) => <StatusBadge status={row.paymentType} type="payment" /> },
     { header: 'Paid', accessorFn: (row) => `Rs. ${Number(row.amountPaid).toFixed(2)}` },
-    { header: 'Due', cell: ({ row }) => <span className={Number(row.amountDue) > 0 ? 'text-red-500' : ''}>Rs. {Number(row.amountDue).toFixed(2)}</span> },
+    { header: 'Due', cell: ({ row }) => <span className={Number(row.amountDue) > 0 ? 'text-red-500' : 'text-green-500'}>Rs. {Number(row.amountDue).toFixed(2)}</span> },
     { header: 'Due Date', accessorFn: (row) => row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-LK') : '-' },
     { header: 'Actions', cell: ({ row }) => (
       <div className="flex gap-2">
         <button className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" onClick={()=> handleEdit(row)}>
           <Eye size={16} />
         </button>
-        <button className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+        <button onClick={()=> setDeletingId(row.id)} className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
           <Trash2 size={16} />
         </button>
       </div>
@@ -159,6 +192,15 @@ const updatePaymentMutation = useMutation({
           </button>
         }
       />
+      <ConfirmDialog
+        isOpen={!!deletingId}
+        onClose={()=> setDeletingId("")}
+        onConfirm={()=> {deletingId && deleteMutation.mutate(deletingId)}}
+        message='Are you sure you want to delete this Purchase record? Inventory items also will be deleted related to this Purchase'
+        title='Delete Purchase'
+        isLoading={deleteMutation.isPending}
+       />
+
       <Modal isOpen={isViewOpen} onClose={closeViewModal} title='Edit Credit Details'>
         <form onSubmit={handleSubmitUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -168,18 +210,20 @@ const updatePaymentMutation = useMutation({
             </div>
             <div className='text-right'>
               <div className="text-xs text-[var(--color-text-secondary)]">Amount Due</div>
-              <div className="text-xl font-bold text-red-500">Rs. {(totalPayment - Number(amountPaid)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+
+              {totalPayment - Number(amountPaid) <= Number(amountToPaid) ? (<p  className="text-xl font-bold text-green-500">Paid</p>) : (<p className="text-xl font-bold text-red-500">Rs. {(totalPayment - Number(amountPaid)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>)}
+              
             </div>
               
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Amount Paid (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} disabled onChange={e => setAmountPaid(e.target.value)} />
-            <FormField label="Add New Payment (Rs.)" type="number" required min="0" max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
+            <FormField disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid)} label="Add New Payment (Rs.)" type="number" required min="0" max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
           </div>
 
           <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
             <button type="button" className="btn btn-secondary ml-4" onClick={closeViewModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) < Number(amountToPaid)}>
+            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid) || createMutation.isPending}>
               {createMutation.isPending ? 'Updating...' : 'Update Purchase'}
             </button>
           </div>
@@ -187,28 +231,33 @@ const updatePaymentMutation = useMutation({
           </form>
       </Modal>
 
-      <DataTable data={purchases} columns={columns} isLoading={isLoading} />
+      <DataTable data={purchaseData?.data ?? []} columns={columns} isLoading={isLoading} />
 
-      <Modal isOpen={isModalOpen} onClose={closeModal} title="New Purchase" size="xl">
+      <Pagination
+        page={page}
+        totalPages={purchaseData?.totalPages ?? 1}
+        total={purchaseData?.total}
+        pageSize={purchaseData?.pageSize}
+        onPageChange={setPage}
+      />
+
+      <Modal isOpen={isModalOpen} onClose={closeModal} title="New Purchase" size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Supplier" as="select" required value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+            <FormField autoFocus label="Supplier" as="select" required value={supplierId} onChange={e => setSupplierId(e.target.value)}>
               <option value="">Select a supplier...</option>
-              {suppliers.map(s => (
+              {suppliers.map((s:any) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </FormField>
-            <FormField label="Payment Type" as="select" value={paymentType} onChange={e => setPaymentType(e.target.value as PurchaseType)}>
-              <option value="PAID">Paid</option>
-              <option value="CREDIT">Credit (Due)</option>
-            </FormField>
+           
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Amount Paid (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} />
-            {paymentType === 'CREDIT' && (
+            
               <FormField label="Due Date" type="date" required value={dueDate} onChange={e => setDueDate(e.target.value)} />
-            )}
+           
           </div>
           
           <div className="mt-6 border-t border-[var(--color-border)] pt-4">

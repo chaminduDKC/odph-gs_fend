@@ -3,15 +3,18 @@ import type { MonthlySalary, ComputeSalaryRequest } from '@shared/types'
 
 export const salaryApi = {
   // Live calculation preview — calls GET /:workerId/:month (computeSalary)
-  computeSalary: async (workerId: string, month: string): Promise<any> => {
-    
-    
+    computeSalary: async (workerId: string, month: string): Promise<any> => {
     const response = await apiClient.get<any>(`/salary/${workerId}/${month}`)
+    return response.data
+  },
+    getSalaryRecords: async (salaryId: string, month: string): Promise<any> => {
+      console.log("Calling from front", salaryId, month)
+    const response = await apiClient.get<any>(`/salary/records/${salaryId}/${month}`)
     return response.data
   },
 
   // Save the salary to DB — calls POST /:workerId/:month (saveSalary)
-  saveSalary: async (workerId: string, month: string, data?: ComputeSalaryRequest): Promise<MonthlySalary> => {
+  saveSalary: async (workerId: string, month: string, data?: ComputeSalaryRequest): Promise<MonthlySalary> => {   
     const response = await apiClient.post<MonthlySalary>(`/salary/${workerId}/${month}`, data ?? {})
     return response.data
   },

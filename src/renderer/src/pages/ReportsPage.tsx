@@ -19,6 +19,8 @@ export const ReportsPage: React.FC = () => {
     enabled: activeTab === 'monthly'
   })
 
+
+
   const { data: inventoryData, isLoading: invLoading } = useQuery({
     queryKey: ['report-inventory'],
     queryFn: () => reportsApi.getInventoryReport(),
@@ -34,10 +36,11 @@ export const ReportsPage: React.FC = () => {
   const invCols: Column<InventoryItem>[] = [
     { header: 'Item Name', accessorKey: 'name' },
     { header: 'Stock Qty', accessorKey: 'quantity' },
-    { header: 'Unit Cost', accessorFn: (row) => `Rs. ${Number(row.unitCost).toFixed(2)}` },
-    { header: 'Selling Price', accessorFn: (row) => `Rs. ${Number(row.sellingPrice).toFixed(2)}` },
-    { header: 'Total Cost Value', accessorFn: (row) => `Rs. ${(row.quantity * Number(row.unitCost)).toFixed(2)}` },
-    { header: 'Potential Profit', accessorFn: (row) => `Rs. ${(row.quantity * (Number(row.sellingPrice) - Number(row.unitCost))).toFixed(2)}` }
+    { header: 'Unit Cost', accessorFn: (row) => `Rs. ${Number((Number(row.costValue) / Number(row.quantity)).toFixed(2)) || 0}` },
+    { header: 'Selling Price', accessorFn: (row) => `Rs. ${Number((Number(row.sellingValue)/ Number(row.quantity)).toFixed(2) )|| 0}`},
+    { header: 'Total Cost Value', accessorFn: (row) => `Rs. ${ Number(row.costValue).toFixed(2)}` },
+    { header: 'Estimated Revenue', accessorFn: (row) => `Rs. ${ Number(row.sellingValue).toFixed(2)}` },
+    { header: 'Potential Profit', accessorFn: (row) => `Rs. ${(Number(row.sellingValue - row.costValue)).toFixed(2)}`}
   ]
 
   const supCols: Column<Supplier>[] = [
@@ -48,16 +51,11 @@ export const ReportsPage: React.FC = () => {
 
   // Data for chart
   const chartData = monthlyData ? [
-    { name: 'Repairs', Revenue: monthlyData.repairRevenue, Cost: 0 },
+    { name: 'Jobs(Repair)', Revenue: (Number(monthlyData.jobsRepairRevenue)- Number(monthlyData.jobsAttachedParts)), Cost: monthlyData.netSalaryPaidMonth },
     { name: 'Parts', Revenue: monthlyData.partsRevenue, Cost: monthlyData.partsCost },
-    { name: 'Bicycles', Revenue: monthlyData.bicycleRevenue, Cost: monthlyData.bicycleCost }
+    { name: 'Bicycles', Revenue: monthlyData.bicycleRevenue, Cost: monthlyData.bicycleRevenue - monthlyData.bicycleProfit },
   ] : []
 
-  // Computed totals (backend doesn't return these pre-summed)
-  const totalRevenue = monthlyData
-    ? (monthlyData.repairRevenue + monthlyData.partsRevenue + monthlyData.bicycleRevenue)
-    : 0
-  const totalCogs = monthlyData ? (monthlyData.partsCost + monthlyData.bicycleCost) : 0
 
   return (
     <div className="animate-fade-in pb-10">
@@ -91,32 +89,54 @@ export const ReportsPage: React.FC = () => {
 
           {monthlyLoading ? <LoadingSpinner /> : monthlyData && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <div className="card bg-green-500/10 border-green-500/20">
-                  <p className="text-sm text-green-400 font-semibold mb-1">Total Revenue</p>
-                  <p className="text-3xl font-bold text-white">Rs. {totalRevenue.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <div className="mt-2 space-y-0.5 text-xs text-green-300/70">
-                    <div className="flex justify-between"><span>🔧 Repairs</span><span>Rs. {monthlyData.repairRevenue.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>🔩 Parts</span><span>Rs. {monthlyData.partsRevenue.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>🚲 Bicycles</span><span>Rs. {monthlyData.bicycleRevenue.toFixed(2)}</span></div>
+                  <p className="text-sm text-green-400 font-semibold mb-1">Total Repair Revenue (Garage)</p>
+                  <p className="text-3xl font-bold text-white">Rs. {(Number(monthlyData.jobsRepairRevenue)- Number(monthlyData.jobsAttachedParts)).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+                <div className="card bg-red-500/10 border-red-500/20">
+                  <p className="text-sm text-red-400 font-semibold mb-1">Parts Attached for Repair</p>
+                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.jobsAttachedParts.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
+                    <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.totalAttachedPartsCost.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Profit</span><span>Rs. {(monthlyData.jobsAttachedParts - monthlyData.totalAttachedPartsCost).toFixed(2)}</span></div>
                   </div>
                 </div>
                 <div className="card bg-red-500/10 border-red-500/20">
-                  <p className="text-sm text-red-400 font-semibold mb-1">Cost of Goods</p>
-                  <p className="text-3xl font-bold text-white">Rs. {totalCogs.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-sm text-red-400 font-semibold mb-1">Parts Sale</p>
+                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.partsRevenue.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
                     <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.partsCost.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Bicycle cost</span><span>Rs. {monthlyData.bicycleCost.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Profit</span><span>Rs. {(monthlyData.partsRevenue - monthlyData.partsCost).toFixed(2)}</span></div>
                   </div>
                 </div>
+                <div className="card bg-red-500/10 border-red-500/20">
+                  <p className="text-sm text-red-400 font-semibold mb-1">Bike Sale</p>
+                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.bicycleRevenue.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
+                    <div className="flex justify-between"><span>Buying Cost</span><span>Rs. {monthlyData.bicycleCost.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Repair Cost</span><span>Rs. {monthlyData.bicycleRepairExpeses.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.bicycleAttachedPartsCost.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Profit</span><span>Rs. {monthlyData.bicycleProfit.toFixed(2)}</span></div>
+                  </div>
+                </div>
+                <div className="card bg-red-500/10 border-red-500/20">
+                  <p className="text-sm text-red-400 font-semibold mb-1">Salary Payments</p>
+                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.netSalaryPaidMonth.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
                 <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-2">
-                  <p className="text-sm text-blue-400 font-semibold mb-1">Gross Profit</p>
-                  <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {monthlyData.grossProfit.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-sm text-blue-400 font-semibold mb-1">Gross Profit(Garage) {monthlyData.jobsLaborCost} - {monthlyData.netSalaryPaidMonth}</p>
+                  <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {(monthlyData.jobsLaborCost - monthlyData.netSalaryPaidMonth ).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <p className="text-xs text-blue-300/70 mt-2">Revenue − Cost of Goods Sold</p>
+                </div>
+                <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-2">
+                  <p className="text-sm text-blue-400 font-semibold mb-1">Gross Profit(Owner)</p>
+                  <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {monthlyData.ownerGrossProfit.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-xs text-blue-300/70 mt-2">Bike Sale + Part Sale + Attached Parts for Repairs</p>
                 </div>
               </div>
 
-              <div className="card h-96">
+              <div className="card h-68">
                 <h3 className="text-lg font-semibold mb-6">Revenue Breakdown</h3>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -152,8 +172,12 @@ export const ReportsPage: React.FC = () => {
                   <p className="text-3xl font-bold text-white">Rs. {Number(inventoryData.totalCostValue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
                 <div className="card border-[var(--color-accent)]/50">
-                  <p className="text-sm text-[var(--color-text-secondary)] mb-1">Potential Sales Value</p>
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-1">Estimated Revenue</p>
                   <p className="text-3xl font-bold text-[var(--color-accent)]">Rs. {Number(inventoryData.totalSellingValue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+                <div className="card border-[var(--color-accent)]/50">
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-1">Potential Profit</p>
+                  <p className="text-3xl font-bold text-[var(--color-accent)]">Rs. {Number(inventoryData.totalSellingValue - inventoryData.totalCostValue).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
 

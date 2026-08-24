@@ -1,10 +1,11 @@
 import { apiClient } from './client'
-import type { Supplier, CreateSupplierRequest, PurchaseTransaction } from '@shared/types'
+import type { Supplier, CreateSupplierRequest, PurchaseTransaction, PaginatedResponse } from '@shared/types'
 
 export const suppliersApi = {
-  listSuppliers: async (search?: string): Promise<Supplier[]> => {
-    const params = search ? { search } : undefined
-    const response = await apiClient.get<Supplier[]>('/suppliers', { params })
+  listSuppliers: async (search?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<Supplier>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (search) params.search = search
+    const response = await apiClient.get<PaginatedResponse<Supplier>>('/suppliers', { params })
     return response.data
   },
 

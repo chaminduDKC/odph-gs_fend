@@ -6,6 +6,7 @@ import {
   CreditCard, FileText, BarChart, LogOut, ChevronLeft, ChevronRight, Menu 
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import Logo from '../../../../build/icon.ico'
 
 export const Layout: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -70,11 +71,12 @@ export const Layout: React.FC = () => {
         <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-border)] no-drag">
           {!isCollapsed && (
             <div className="flex items-center gap-2 font-bold text-lg text-white">
-              <Wrench className="w-5 h-5 text-[var(--color-accent)]" />
-              <span>OGPH Admin</span>
+            
+              <img src={Logo} alt="logo" className="w-10 h-10 rounded-full text-[var(--color-accent)]" />
+              <span>Admin</span>
             </div>
           )}
-          {isCollapsed && <Wrench className="w-6 h-6 mx-auto text-[var(--color-accent)]" />}
+          {isCollapsed &&  <img src={Logo} alt="logo" className="w-5 h-5 rounded-full text-[var(--color-accent)]" />}
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
             className="p-1 rounded hover:bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] no-drag"

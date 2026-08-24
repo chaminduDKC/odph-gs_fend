@@ -2,6 +2,9 @@ import { app, shell, BrowserWindow, protocol, net } from 'electron'
 import { join } from 'path'
 import { registerStorageHandlers } from './storage'
 import { autoUpdater } from 'electron-updater'
+import { ipcMain } from 'electron'
+import { savePdfAndOpen } from './storage'
+
 
 
 
@@ -66,6 +69,14 @@ app.whenReady().then(() => {
     const filePath = join(__dirname, '../renderer', url.pathname)
     return net.fetch(`file://${filePath}`)
   })
+
+
+
+  ipcMain.handle('pdf:save-pdf-and-open', async (_event, args: { fileName: string; buffer: ArrayBuffer, subFolder:string }) => {
+  return savePdfAndOpen(args.fileName, args.buffer, args.subFolder)
+
+})
+
 
   // Register IPC token storage handlers
   registerStorageHandlers()

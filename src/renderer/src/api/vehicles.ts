@@ -1,10 +1,11 @@
 import { apiClient } from './client'
-import type { Vehicle, CreateVehicleRequest, Job } from '@shared/types'
+import type { Vehicle, CreateVehicleRequest, Job, PaginatedResponse } from '@shared/types'
 
 export const vehiclesApi = {
-  listVehicles: async (search?: string): Promise<Vehicle[]> => {
-    const params = search ? { search } : undefined
-    const response = await apiClient.get<Vehicle[]>('/vehicles', { params })
+  listVehicles: async (search?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<Vehicle>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (search) params.search = search
+    const response = await apiClient.get<PaginatedResponse<Vehicle>>('/vehicles', { params })
     return response.data
   },
 

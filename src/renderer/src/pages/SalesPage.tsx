@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { salesApi } from '../api/sales'
@@ -8,15 +8,36 @@ import { PageHeader } from '../components/PageHeader'
 import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
+import { Pagination } from '../components/Pagination'
 import { PartSale } from '@shared/types'
 
 export const SalesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [page, setPage] = useState(1)
   
-  const { data: sales = [], isLoading } = useQuery({ queryKey: ['sales'], queryFn: salesApi.listSales })
-  const { data: items = [] } = useQuery({ queryKey: ['inventory'], queryFn: () => inventoryApi.listItems() })
-  const { data: customers = [] } = useQuery({ queryKey: ['customers'], queryFn: () => customersApi.listCustomers() })
+  const { data: salesData, isLoading } = useQuery({
+    queryKey: ['sales', page],
+    queryFn: () => salesApi.listSales(page)
+  })
+
+  useEffect(() => {
+    if (salesData && page < salesData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['sales', page + 1],
+        queryFn: () => salesApi.listSales(page + 1)
+      })
+    }
+  }, [salesData, page, queryClient])
+
+  const { data: items = [] } = useQuery({
+    queryKey: ['inventory', 'all'],
+    queryFn: async () => (await inventoryApi.listItems(undefined, undefined, 1, 1000)).data
+  })
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers', 'all'],
+    queryFn: async () => (await customersApi.listCustomers(undefined, 1, 1000)).data
+  })
 
   // Form State
   const [itemId, setItemId] = useState('')
@@ -90,7 +111,15 @@ export const SalesPage: React.FC = () => {
         }
       />
 
-      <DataTable data={sales} columns={columns} isLoading={isLoading} />
+      <DataTable data={salesData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={salesData?.totalPages ?? 1}
+        total={salesData?.total}
+        pageSize={salesData?.pageSize}
+        onPageChange={setPage}
+      />
 
       <Modal isOpen={isModalOpen} onClose={closeModal} title="Record Sale">
         <form onSubmit={handleSubmit} className="space-y-4">

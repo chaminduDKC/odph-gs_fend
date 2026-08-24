@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Eye, Edit, Trash2 } from 'lucide-react'
 import { customersApi } from '../api/customers'
@@ -8,25 +8,43 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { Customer, Vehicle } from '@shared/types'
+import { isAxiosError } from 'axios'
+import { MessageDialog } from '@renderer/components/MessageDialog'
 
 export const CustomersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
   
   // Form state
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
 
-  const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['customers', search],
-    queryFn: () => customersApi.listCustomers(search)
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const { data: customerData, isLoading } = useQuery({
+    queryKey: ['customers', search, page],
+    queryFn: () => customersApi.listCustomers(search, page)
   })
+
+  useEffect(() => {
+    if (customerData && page < customerData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['customers', search, page + 1],
+        queryFn: () => customersApi.listCustomers(search, page + 1)
+      })
+    }
+  }, [customerData, page, search, queryClient])
 
   const { data: customerVehicles = [], isLoading: loadingVehicles } = useQuery({
     queryKey: ['customerVehicles', editingCustomer?.id],
@@ -41,15 +59,43 @@ export const CustomersPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       closeModal()
+     
+    },
+    onError(error:unknown){
+      closeModal()
+      if (isAxiosError(error)) {
+        console.log('status:', error.response?.status)
+        console.log('data:', error.response?.data.message)
+        const msg = error.response?.data.message
+        editingCustomer ? 
+          setMessageDialog({ type: 'error', title: 'Failed to Update', message: msg })
+          :
+          setMessageDialog({ type: 'error', title: 'Failed to Create', message: msg })
+      }
+
     }
   })
 
   const deleteMutation = useMutation({
-    mutationFn: customersApi.deleteCustomer,
+    mutationFn:(id:string)=>  customersApi.deleteCustomer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       setDeleteId(null)
-    }
+      //setMessageDialog({ type: 'success', title: 'Deleted', message: 'Customer deleted successfully.' })
+    },
+    
+  onError: (error: unknown) => {
+    setDeleteId(null)
+   if (isAxiosError(error)) {
+    console.log('status:', error.response?.status)
+    console.log('data:', error.response?.data.message)
+    const msg = error.response?.data.message
+    setMessageDialog({ type: 'error', title: 'Cannot Delete', message: msg })
+
+  }
+    
+  }
+   
   })
 
   const handleEdit = (customer: Customer) => {
@@ -126,7 +172,15 @@ export const CustomersPage: React.FC = () => {
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name or phone..." />
       </div>
 
-      <DataTable data={customers} columns={columns} isLoading={isLoading} />
+      <DataTable data={customerData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={customerData?.totalPages ?? 1}
+        total={customerData?.total}
+        pageSize={customerData?.pageSize}
+        onPageChange={setPage}
+      />
 
       <Modal 
         isOpen={isModalOpen} 
@@ -134,12 +188,12 @@ export const CustomersPage: React.FC = () => {
         title={editingCustomer ? "Edit Customer" : "Add Customer"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Full Name" required value={name} onChange={e => setName(e.target.value)} />
-          <FormField label="Phone Number" required value={phone} onChange={e => setPhone(e.target.value)} />
+          <FormField autoFocus label="Full Name" required value={name} onChange={e => setName(e.target.value)} />
+          <FormField label="Phone Number" required value={phone} type='number' onChange={e => setPhone(e.target.value)} />
           <FormField label="Address" as="textarea" rows={3} value={address} onChange={e => setAddress(e.target.value)} />
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending || !name.trim() || phone.length < 9 || !address.trim() }>
               {saveMutation.isPending ? 'Saving...' : 'Save Customer'}
             </button>
           </div>
@@ -169,6 +223,16 @@ export const CustomersPage: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {messageDialog && (
+        <MessageDialog
+          isOpen={true}
+          onClose={() => setMessageDialog(null)}
+          type={messageDialog.type}
+          title={messageDialog.title}
+          message={messageDialog.message}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={!!deleteId}

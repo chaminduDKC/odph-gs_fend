@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit, Trash2, Eye } from 'lucide-react'
 import { suppliersApi } from '../api/suppliers'
@@ -8,12 +8,14 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { Supplier, PurchaseTransaction } from '@shared/types'
 import { StatusBadge } from '../components/StatusBadge'
 
 export const SuppliersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -23,10 +25,23 @@ export const SuppliersPage: React.FC = () => {
   const [name, setName] = useState('')
   const [contact, setContact] = useState('')
 
-  const { data: suppliers = [], isLoading } = useQuery({
-    queryKey: ['suppliers', search],
-    queryFn: () => suppliersApi.listSuppliers(search)
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const { data: supplierData, isLoading } = useQuery({
+    queryKey: ['suppliers', search, page],
+    queryFn: () => suppliersApi.listSuppliers(search, page)
   })
+
+  useEffect(() => {
+    if (supplierData && page < supplierData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['suppliers', search, page + 1],
+        queryFn: () => suppliersApi.listSuppliers(search, page + 1)
+      })
+    }
+  }, [supplierData, page, search, queryClient])
 
   const { data: transactions = [], isLoading: loadingTx } = useQuery({
     queryKey: ['supplierTransactions', editingSupplier?.id],
@@ -136,7 +151,15 @@ export const SuppliersPage: React.FC = () => {
         <SearchInput value={search} onChange={setSearch} placeholder="Search suppliers..." />
       </div>
 
-      <DataTable data={suppliers} columns={columns} isLoading={isLoading} />
+      <DataTable data={supplierData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={supplierData?.totalPages ?? 1}
+        total={supplierData?.total}
+        pageSize={supplierData?.pageSize}
+        onPageChange={setPage}
+      />
 
       <Modal 
         isOpen={isModalOpen} 
@@ -144,11 +167,11 @@ export const SuppliersPage: React.FC = () => {
         title={editingSupplier ? "Edit Supplier" : "Add Supplier"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Supplier Name" required value={name} onChange={e => setName(e.target.value)} />
-          <FormField label="Contact Information" value={contact} onChange={e => setContact(e.target.value)} />
+          <FormField autoFocus label="Supplier Name" required value={name} onChange={e => setName(e.target.value)} />
+          <FormField label="Contact Information" type='number' value={contact} onChange={e => setContact(e.target.value)} />
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending || !name.trim() || contact.length < 9}>
               {saveMutation.isPending ? 'Saving...' : 'Save Supplier'}
             </button>
           </div>

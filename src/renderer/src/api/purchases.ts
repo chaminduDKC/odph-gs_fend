@@ -1,9 +1,9 @@
 import { apiClient } from './client'
-import type { PurchaseTransaction, CreatePurchaseRequest } from '@shared/types'
+import type { PurchaseTransaction, CreatePurchaseRequest, PaginatedResponse } from '@shared/types'
 
 export const purchasesApi = {
-  listPurchases: async (): Promise<PurchaseTransaction[]> => {
-    const response = await apiClient.get<PurchaseTransaction[]>('/purchases')
+  listPurchases: async (page = 1, pageSize = 12): Promise<PaginatedResponse<PurchaseTransaction>> => {
+    const response = await apiClient.get<PaginatedResponse<PurchaseTransaction>>('/purchases', { params: { page, pageSize } })
     return response.data
   },
 
@@ -14,6 +14,12 @@ export const purchasesApi = {
 
   createPurchase: async (data: CreatePurchaseRequest): Promise<PurchaseTransaction> => {
     const response = await apiClient.post<PurchaseTransaction>('/purchases', data)
+    return response.data
+  },
+  deletePurchase: async (id:string): Promise<PurchaseTransaction> => {
+    const response = await apiClient.delete<PurchaseTransaction>(`/purchases/${id}`)
+    // implement delete method
+    ///////////////////////////////////////////////////////////////////////////////////
     return response.data
   },
   updatePurchase: async (id: string, amount: number, supplierId:string): Promise<PurchaseTransaction> => {

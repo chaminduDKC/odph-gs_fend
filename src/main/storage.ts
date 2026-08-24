@@ -1,5 +1,29 @@
 import { ipcMain, safeStorage } from 'electron'
 import Store from 'electron-store'
+import { app, shell } from 'electron'
+import { promises as fs } from 'fs'
+import path from 'path'
+
+export async function savePdfAndOpen(fileName: string, buffer: ArrayBuffer, subFolder:string) {
+  try {
+    const downloadsDir = app.getPath('documents')
+    const targetDir = path.join(downloadsDir, 'my-garage', subFolder)
+
+    await fs.mkdir(targetDir, { recursive: true })
+
+    const filePath = path.join(targetDir, fileName)
+    await fs.writeFile(filePath, Buffer.from(buffer))
+
+    const openError = await shell.openPath(filePath)
+    if (openError) {
+      return { success: false, error: openError }
+    }
+
+    return { success: true, data: { filePath } }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to save paysheet' }
+  }
+}
 
 interface StoreSchema {
   authToken: string | null

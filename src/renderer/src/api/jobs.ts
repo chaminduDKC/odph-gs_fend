@@ -1,10 +1,11 @@
 import { apiClient } from './client'
-import type { Job, CreateJobRequest, AddJobPartRequest, JobStatus, PaymentStatus } from '@shared/types'
+import type { Job, CreateJobRequest, AddJobPartRequest, JobStatus, PaymentStatus, PaginatedResponse } from '@shared/types'
 
 export const jobsApi = {
-  listJobs: async (status?: JobStatus): Promise<Job[]> => {
-    const params = status ? { status } : undefined
-    const response = await apiClient.get<Job[]>('/jobs', { params })
+  listJobs: async (status?: JobStatus, page = 1, pageSize = 12): Promise<PaginatedResponse<Job>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (status) params.status = status
+    const response = await apiClient.get<PaginatedResponse<Job>>('/jobs', { params })
     return response.data
   },
 
@@ -35,6 +36,9 @@ export const jobsApi = {
 
   removeJobPart: async (id: string, partId: string): Promise<void> => {
     await apiClient.delete(`/jobs/${id}/parts/${partId}`)
+  },
+  deleteJob: async (id: string): Promise<void> => {
+    await apiClient.delete(`/jobs/${id}`)
   },
 
   downloadInvoice: async (id: string): Promise<Blob> => {

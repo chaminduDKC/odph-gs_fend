@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { vehiclesApi } from '../api/vehicles'
@@ -9,14 +9,19 @@ import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Pagination } from '../components/Pagination'
 import { Vehicle } from '@shared/types'
+import { isAxiosError } from 'axios'
+import { MessageDialog } from '@renderer/components/MessageDialog'
 
 export const VehiclesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
 
   // Form State
   const [regNumber, setRegNumber] = useState('')
@@ -24,14 +29,27 @@ export const VehiclesPage: React.FC = () => {
   const [model, setModel] = useState('')
   const [customerId, setCustomerId] = useState('')
 
-  const { data: vehicles = [], isLoading } = useQuery({
-    queryKey: ['vehicles', search],
-    queryFn: () => vehiclesApi.listVehicles(search)
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const { data: vehicleData, isLoading } = useQuery({
+    queryKey: ['vehicles', search, page],
+    queryFn: () => vehiclesApi.listVehicles(search, page)
   })
 
+  useEffect(() => {
+    if (vehicleData && page < vehicleData.totalPages) {
+      queryClient.prefetchQuery({
+        queryKey: ['vehicles', search, page + 1],
+        queryFn: () => vehiclesApi.listVehicles(search, page + 1)
+      })
+    }
+  }, [vehicleData, page, search, queryClient])
+
   const { data: customers = [] } = useQuery({
-    queryKey: ['customers'],
-    queryFn: () => customersApi.listCustomers()
+    queryKey: ['customers', 'all'],
+    queryFn: async () => (await customersApi.listCustomers(undefined, 1, 1000)).data
   })
 
   const saveMutation = useMutation({
@@ -41,6 +59,17 @@ export const VehiclesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] })
       closeModal()
+    },
+    onError(error:unknown){
+      closeModal()
+      if(isAxiosError(error)){
+        console.log(error.response?.data)
+        editingVehicle ?
+        setMessageDialog({ type: 'error', title: 'Cannot Update', message: error.response?.data.message })
+        :
+        setMessageDialog({ type: 'error', title: 'Cannot Create', message: error.response?.data.message })
+
+      }
     }
   })
 
@@ -49,6 +78,14 @@ export const VehiclesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] })
       setDeleteId(null)
+    },
+    onError(error:unknown){
+      setDeleteId(null)
+      if(isAxiosError(error)){
+        console.log(error.response?.data)
+        setMessageDialog({ type: 'error', title: 'Cannot Delete', message: error.response?.data.message })
+
+      }
     }
   })
 
@@ -110,7 +147,15 @@ export const VehiclesPage: React.FC = () => {
         <SearchInput value={search} onChange={setSearch} placeholder="Search by Reg No or Owner..." />
       </div>
 
-      <DataTable data={vehicles} columns={columns} isLoading={isLoading} />
+      <DataTable data={vehicleData?.data ?? []} columns={columns} isLoading={isLoading} />
+
+      <Pagination
+        page={page}
+        totalPages={vehicleData?.totalPages ?? 1}
+        total={vehicleData?.total}
+        pageSize={vehicleData?.pageSize}
+        onPageChange={setPage}
+      />
 
       <Modal 
         isOpen={isModalOpen} 
@@ -118,7 +163,7 @@ export const VehiclesPage: React.FC = () => {
         title={editingVehicle ? "Edit Vehicle" : "Add Vehicle"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField label="Registration Number" required value={regNumber} onChange={e => setRegNumber(e.target.value)} />
+          <FormField autoFocus label="Registration Number" required value={regNumber} onChange={e => setRegNumber(e.target.value)} />
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Make (e.g. Toyota)" required value={make} onChange={e => setMake(e.target.value)} />
             <FormField label="Model (e.g. Corolla)" required value={model} onChange={e => setModel(e.target.value)} />
@@ -131,12 +176,21 @@ export const VehiclesPage: React.FC = () => {
           </FormField>
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending}>
+            <button type="submit" className="btn btn-primary" disabled={saveMutation.isPending || !regNumber.trim() || !make.trim() || !model.trim() || !customerId}>
               {saveMutation.isPending ? 'Saving...' : 'Save Vehicle'}
             </button>
           </div>
         </form>
       </Modal>
+        {messageDialog && (
+              <MessageDialog
+                isOpen={true}
+                onClose={() => setMessageDialog(null)}
+                type={messageDialog.type}
+                title={messageDialog.title}
+                message={messageDialog.message}
+              />
+            )}
 
       <ConfirmDialog
         isOpen={!!deleteId}

@@ -14,7 +14,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   title, value, icon: Icon, colorClass = 'text-[var(--color-accent)]', trend, trendUp
 }) => {
   return (
-    <div className="glass-card rounded-xl p-5 flex flex-col hover:-translate-y-1 transition-transform duration-200 cursor-default">
+    <div className="glass-card rounded p-5 flex flex-col hover:-translate-y-1 transition-transform duration-200 cursor-default">
       <div className="flex justify-between items-start mb-4">
         <div className="text-[var(--color-text-secondary)] font-medium text-sm">
           {title}
