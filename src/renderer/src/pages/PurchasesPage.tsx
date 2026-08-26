@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, Trash2 } from 'lucide-react'
+import { Plus, Eye, Trash2, Sparkles, Package } from 'lucide-react'
 import { purchasesApi } from '../api/purchases'
 import { suppliersApi } from '../api/suppliers'
 import { inventoryApi } from '../api/inventory'
@@ -10,9 +10,20 @@ import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
-import { PurchaseTransaction, PurchaseType, PurchaseItem } from '@shared/types'
+import { PurchaseTransaction, PurchaseType } from '@shared/types'
 import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
-import { p } from 'framer-motion/client'
+
+interface PurchaseLineItemState {
+  id: string
+  isCustom: boolean
+  itemId: string
+  name: string
+  category: string
+  quantity: number
+  unitCost: number
+  sellingPrice: number
+  reorderLevel: number
+}
 
 export const PurchasesPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -42,6 +53,14 @@ export const PurchasesPage: React.FC = () => {
     queryFn: async () => (await inventoryApi.listItems(undefined, undefined, 1, 1000)).data
   })
 
+  const existingCategories = useMemo(() => {
+    const cats = new Set<string>()
+    items.forEach(i => {
+      if (i.category) cats.add(i.category.trim())
+    })
+    return Array.from(cats)
+  }, [items])
+
   // Form State
   const [supplierId, setSupplierId] = useState('')
   const [purchaseId, setPurchaseId] = useState('')
@@ -51,14 +70,14 @@ export const PurchasesPage: React.FC = () => {
   const [amountToPaid, setAmountToPaid] = useState('0')
   const [totalPayment, setTotalPayment] = useState(0)
   const [dueDate, setDueDate] = useState(() => {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-})
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })
   const [deletingId, setDeletingId] = useState('')
-  const [lineItems, setLineItems] = useState<{ id: string; itemId: string; quantity: number; unitCost: number }[]>([])
+  const [lineItems, setLineItems] = useState<PurchaseLineItemState[]>([])
 
   const createMutation = useMutation({
     mutationFn: purchasesApi.createPurchase,
@@ -66,28 +85,44 @@ export const PurchasesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['purchases'] })
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       closeModal()
     }
   })
-const updatePaymentMutation = useMutation({
-  mutationFn: (vars: { purchaseId: string; amountToPaid: number; supplierId:string }) => 
-    purchasesApi.updatePurchase(vars.purchaseId, vars.amountToPaid, vars.supplierId),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['purchases'] })
-    queryClient.invalidateQueries({ queryKey: ['inventory'] })
-    queryClient.invalidateQueries({ queryKey: ['suppliers'] })
-    closeViewModal()
-  }
-})
+
+  const updatePaymentMutation = useMutation({
+    mutationFn: (vars: { purchaseId: string; amountToPaid: number; supplierId: string }) => 
+      purchasesApi.updatePurchase(vars.purchaseId, vars.amountToPaid, vars.supplierId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      closeViewModal()
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: purchasesApi.deletePurchase,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      setDeletingId('')
+    }
+  })
 
   const closeModal = () => {
     setIsModalOpen(false)
     setSupplierId('')
     setPaymentType('CREDIT')
     setAmountPaid('0')
-    setDueDate('')
+    setDueDate(() => {
+      const today = new Date()
+      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    })
     setLineItems([])
   }
+
   const closeViewModal = () => {
     setIsViewOpen(false)
     setSupplierId('')
@@ -98,25 +133,67 @@ const updatePaymentMutation = useMutation({
     setAmountToPaid("0")
   }
 
-  const handleEdit = (row:PurchaseTransaction)=>{
-    console.log(row);
+  const handleEdit = (row: PurchaseTransaction) => {
     setSupplierId(row.supplierId)
     setPurchaseId(row.id)
     setPaymentType(row.paymentType)
     setAmountPaid(row.amountPaid)
-    setDueDate(row.dueDate)
+    setDueDate(row.dueDate || '')
     setTotalPayment(Number(row.total))
     setIsViewOpen(true)
   }
+
   const handleAddLineItem = () => {
-    setLineItems([...lineItems, { id: Math.random().toString(), itemId: '', quantity: 1, unitCost: 0 }])
+    setLineItems([
+      ...lineItems,
+      {
+        id: Math.random().toString(),
+        isCustom: false,
+        itemId: '',
+        name: '',
+        category: '',
+        quantity: 1,
+        unitCost: 0,
+        sellingPrice: 0,
+        reorderLevel: 5
+      }
+    ])
+  }
+
+  const handleAddCustomLineItem = () => {
+    setLineItems([
+      ...lineItems,
+      {
+        id: Math.random().toString(),
+        isCustom: true,
+        itemId: '',
+        name: '',
+        category: '',
+        quantity: 1,
+        unitCost: 0,
+        sellingPrice: 0,
+        reorderLevel: 5
+      }
+    ])
   }
   
+  const handleToggleCustom = (id: string) => {
+    setLineItems(lineItems.map(i => {
+      if (i.id !== id) return i
+      const nextIsCustom = !i.isCustom
+      return {
+        ...i,
+        isCustom: nextIsCustom,
+        itemId: nextIsCustom ? '' : i.itemId
+      }
+    }))
+  }
+
   const handleRemoveLineItem = (id: string) => {
     setLineItems(lineItems.filter(i => i.id !== id))
   }
   
-  const handleLineItemChange = (id: string, field: string, value: string | number) => {
+  const handleLineItemChange = (id: string, field: keyof PurchaseLineItemState, value: string | number | boolean) => {
     setLineItems(lineItems.map(i => {
       if (i.id !== id) return i
       
@@ -132,35 +209,65 @@ const updatePaymentMutation = useMutation({
   }
 
   const total = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0)
+    return lineItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitCost || 0)), 0)
   }, [lineItems])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!supplierId) return alert('Please select a supplier')
     if (lineItems.length === 0) return alert('Please add at least one item')
+
+    for (const [index, item] of lineItems.entries()) {
+      if (item.isCustom) {
+        if (!item.name.trim()) {
+          return alert(`Item #${index + 1}: Please enter the custom item name`)
+        }
+        if (item.quantity <= 0) {
+          return alert(`Item #${index + 1}: Quantity must be at least 1`)
+        }
+      } else {
+        if (!item.itemId) {
+          return alert(`Item #${index + 1}: Please select an inventory item or switch to custom item`)
+        }
+        if (item.quantity <= 0) {
+          return alert(`Item #${index + 1}: Quantity must be at least 1`)
+        }
+      }
+    }
     
     createMutation.mutate({
       supplierId,
       paymentType,
       amountPaid: Number(amountPaid),
       dueDate: paymentType === 'CREDIT' ? dueDate : undefined,
-      items: lineItems.map(({ itemId, quantity, unitCost }) => ({ itemId, quantity, unitCost }))
+      items: lineItems.map((item) => {
+        if (item.isCustom) {
+          return {
+            name: item.name.trim(),
+            category: item.category.trim() || null,
+            sellingPrice: Number(item.sellingPrice) || Number(item.unitCost),
+            reorderLevel: Number(item.reorderLevel) || 5,
+            quantity: Number(item.quantity),
+            unitCost: Number(item.unitCost)
+          }
+        }
+        return {
+          itemId: item.itemId,
+          quantity: Number(item.quantity),
+          unitCost: Number(item.unitCost)
+        }
+      })
     })
   }
 
-    const handleSubmitUpdate = (e: React.FormEvent) => {
+  const handleSubmitUpdate = (e: React.FormEvent) => {
     e.preventDefault()
-    
-    
     updatePaymentMutation.mutate({
       purchaseId: purchaseId,       
       amountToPaid: Number(amountToPaid),
-      supplierId:supplierId
+      supplierId: supplierId
     })
   }
-  const deleteMutation = useMutation({
-    mutationFn:purchasesApi.deletePurchase
-  })
 
   const columns: Column<PurchaseTransaction>[] = [
     { header: 'Date', accessorFn: (row) => new Date(row.createdAt).toLocaleDateString('en-LK') },
@@ -223,8 +330,8 @@ const updatePaymentMutation = useMutation({
 
           <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
             <button type="button" className="btn btn-secondary ml-4" onClick={closeViewModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid) || createMutation.isPending}>
-              {createMutation.isPending ? 'Updating...' : 'Update Purchase'}
+            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid) || updatePaymentMutation.isPending}>
+              {updatePaymentMutation.isPending ? 'Updating...' : 'Update Purchase'}
             </button>
           </div>
           
@@ -242,79 +349,231 @@ const updatePaymentMutation = useMutation({
       />
 
       <Modal isOpen={isModalOpen} onClose={closeModal} title="New Purchase" size="lg">
+        <datalist id="category-suggestions">
+          {existingCategories.map(cat => (
+            <option key={cat} value={cat} />
+          ))}
+        </datalist>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField autoFocus label="Supplier" as="select" required value={supplierId} onChange={e => setSupplierId(e.target.value)}>
               <option value="">Select a supplier...</option>
-              {suppliers.map((s:any) => (
+              {suppliers.map((s: any) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </FormField>
-           
+            <FormField disabled label="Payment Type" as="select" value={paymentType} onChange={e => setPaymentType(e.target.value as PurchaseType)}>
+              <option value="CREDIT">Credit</option>
+              <option value="PAID">Full Payment (Paid)</option>
+            </FormField>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Amount Paid (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} />
-            
+            {paymentType === 'CREDIT' ? (
               <FormField label="Due Date" type="date" required value={dueDate} onChange={e => setDueDate(e.target.value)} />
-           
+            ) : (
+              <FormField label="Due Date (Optional)" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            )}
           </div>
           
           <div className="mt-6 border-t border-[var(--color-border)] pt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-white">Line Items</h3>
-              <button type="button" className="btn btn-secondary text-sm py-1" onClick={handleAddLineItem}>
-                <Plus size={16} /> Add Item
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 className="font-semibold text-white text-base">Line Items</h3>
+                <p className="text-xs text-[var(--color-text-muted)]">Select existing items or add custom items (goes to inventory)</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5" 
+                  onClick={handleAddLineItem}
+                >
+                  Add From Inventory
+                </button>
+                <button 
+                  type="button" 
+                  className="btn text-xs py-1.5 px-3 flex items-center gap-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40" 
+                  onClick={handleAddCustomLineItem}
+                >
+                  Add Custom Item
+                </button>
+              </div>
             </div>
             
             {lineItems.length === 0 ? (
-              <div className="text-center p-4 bg-[var(--color-bg-secondary)] rounded border border-[var(--color-border)] text-[var(--color-text-muted)] text-sm">
-                No items added yet. Click "Add Item" to start.
+              <div className="text-center py-6 px-4 bg-[var(--color-bg-secondary)] rounded-lg border border-dashed border-[var(--color-border)] text-[var(--color-text-muted)] text-sm">
+                No items added yet. Click &quot;Add From Inventory&quot; or &quot;Add Custom Item&quot; above.
               </div>
             ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar p-1">
+              <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar p-1">
                 {lineItems.map((item, index) => (
-                  <div key={item.id} className="flex gap-2 items-start bg-[var(--color-bg-secondary)] p-2 rounded border border-[var(--color-border)]">
-                    <div className="flex-1">
-                      <select 
-                        required
-                        className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white"
-                        value={item.itemId} 
-                        onChange={e => handleLineItemChange(item.id, 'itemId', e.target.value)}
+                  <div key={item.id} className="p-3 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border)] space-y-2.5 transition-all">
+                    <div className="flex items-center justify-between text-xs pb-1.5 border-b border-[var(--color-border)]/50">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[var(--color-text-secondary)]">#{index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCustom(item.id)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-medium border flex items-center gap-1 transition-colors ${
+                            item.isCustom
+                              ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/30'
+                              : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                          }`}
+                          title="Click to switch between Existing Inventory and Custom item"
+                        >
+                          {item.isCustom ? (
+                            <>
+                              Custom / New Item
+                            </>
+                          ) : (
+                            <>
+                              Existing Inventory
+                            </>
+                          )}
+                        </button>
+                        {item.isCustom && (
+                          <span className="text-[11px] text-[var(--color-text-muted)] italic">
+                            (Will be added to inventory)
+                          </span>
+                        )}
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => handleRemoveLineItem(item.id)}
+                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+                        title="Remove item"
                       >
-                        <option value="">Select inventory item...</option>
-                        {items.map(i => (
-                          <option key={i.id} value={i.id}>{i.name}</option>
-                        ))}
-                      </select>
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <div className="w-20">
-                      <input 
-                        type="number" required min="1" placeholder="Qty"
-                        className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white"
-                        value={item.quantity} 
-                        onChange={e => handleLineItemChange(item.id, 'quantity', Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="w-24">
-                      <input 
-                        type="number" required min="0" step="0.01" placeholder="Cost"
-                        className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white"
-                        value={item.unitCost} 
-                        onChange={e => handleLineItemChange(item.id, 'unitCost', Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="w-24 flex items-center justify-end px-2 text-sm">
-                      Rs. {(item.quantity * item.unitCost).toFixed(2)}
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={() => handleRemoveLineItem(item.id)}
-                      className="p-1.5 text-red-500 hover:bg-red-500/20 rounded"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+
+                    {item.isCustom ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] text-[var(--color-text-secondary)] mb-1 block">Item Name *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Brake Pads Shimano"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                              value={item.name}
+                              onChange={e => handleLineItemChange(item.id, 'name', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-[var(--color-text-secondary)] mb-1 block">Category</label>
+                            <input
+                              type="text"
+                              list="category-suggestions"
+                              placeholder="e.g. Parts, Oil, Accessories"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                              value={item.category}
+                              onChange={e => handleLineItemChange(item.id, 'category', e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+                          <div>
+                            <label className="text-[11px] text-[var(--color-text-secondary)] mb-1 block">Qty *</label>
+                            <input
+                              type="number"
+                              required
+                              min="1"
+                              placeholder="1"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                              value={item.quantity || ''}
+                              onChange={e => handleLineItemChange(item.id, 'quantity', Number(e.target.value))}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-[var(--color-text-secondary)] mb-1 block">Unit Cost (Rs.) *</label>
+                            <input
+                              type="number"
+                              required
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                              value={item.unitCost || ''}
+                              onChange={e => {
+                                const cost = Number(e.target.value)
+                                setLineItems(prev => prev.map(i => {
+                                  if (i.id !== item.id) return i
+                                  const autoSelling = (i.sellingPrice === 0 || i.sellingPrice === i.unitCost) ? cost : i.sellingPrice
+                                  return { ...i, unitCost: cost, sellingPrice: autoSelling }
+                                }))
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-[var(--color-text-secondary)] mb-1 block">Selling Price (Rs.)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder={item.unitCost ? `${item.unitCost}` : '0.00'}
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                              value={item.sellingPrice || ''}
+                              onChange={e => handleLineItemChange(item.id, 'sellingPrice', Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="text-right pb-1 px-1">
+                            <div className="text-[10px] text-[var(--color-text-muted)]">Subtotal</div>
+                            <div className="text-sm font-semibold text-[var(--color-accent)]">
+                              Rs. {((item.quantity || 0) * (item.unitCost || 0)).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                        <div className="flex-1 w-full">
+                          <select 
+                            required
+                            className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-1.5 text-sm text-white  focus:outline-none"
+                            value={item.itemId} 
+                            onChange={e => {
+                              if (e.target.value === '__NEW_CUSTOM__') {
+                                handleToggleCustom(item.id)
+                              } else {
+                                handleLineItemChange(item.id, 'itemId', e.target.value)
+                              }
+                            }}
+                          >
+                            <option value="">Select inventory item...</option>
+                            {items.map(i => (
+                              <option key={i.id} value={i.id}>{i.name} {i.category ? `(${i.category})` : ''}</option>
+                            ))}
+                            <option value="__NEW_CUSTOM__">+ Create New Custom Item...</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2 items-center w-full sm:w-auto">
+                          <div className="w-20">
+                            <input 
+                              type="number" required min="1" placeholder="Qty"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:outline-none"
+                              value={item.quantity || ''} 
+                              onChange={e => handleLineItemChange(item.id, 'quantity', Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="w-28">
+                            <input 
+                              type="number" required min="0" step="0.01" placeholder="Cost"
+                              className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:outline-none"
+                              value={item.unitCost || ''} 
+                              onChange={e => handleLineItemChange(item.id, 'unitCost', Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="w-28 flex items-center justify-end px-2 text-sm font-semibold text-[var(--color-accent)]">
+                            Rs. {((item.quantity || 0) * (item.unitCost || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -322,12 +581,15 @@ const updatePaymentMutation = useMutation({
           </div>
           
           <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
+            {Number(amountPaid) > Number(total) && (
+              <div className="text-md text-red-500 ">Invalid paid amount and total</div>
+            )}
             <div className="text-right">
               <div className="text-xs text-[var(--color-text-secondary)]">Total Amount</div>
               <div className="text-xl font-bold text-[var(--color-accent)]">Rs. {total.toFixed(2)}</div>
             </div>
             <button type="button" className="btn btn-secondary ml-4" onClick={closeModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={createMutation.isPending || lineItems.length === 0}>
+            <button type="submit" className="btn btn-primary" disabled={createMutation.isPending || lineItems.length === 0 || Number(amountPaid) > Number(total)}>
               {createMutation.isPending ? 'Saving...' : 'Save Purchase'}
             </button>
           </div>

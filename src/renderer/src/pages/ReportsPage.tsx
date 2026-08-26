@@ -56,6 +56,9 @@ export const ReportsPage: React.FC = () => {
     { name: 'Bicycles', Revenue: monthlyData.bicycleRevenue, Cost: monthlyData.bicycleRevenue - monthlyData.bicycleProfit },
   ] : []
 
+   const fmt = (price:string | number)=>{
+    return Number(price).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})
+  }
 
   return (
     <div className="animate-fade-in pb-10">
@@ -89,7 +92,7 @@ export const ReportsPage: React.FC = () => {
 
           {monthlyLoading ? <LoadingSpinner /> : monthlyData && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="card bg-green-500/10 border-green-500/20">
                   <p className="text-sm text-green-400 font-semibold mb-1">Total Repair Revenue (Garage)</p>
                   <p className="text-3xl font-bold text-white">Rs. {(Number(monthlyData.jobsRepairRevenue)- Number(monthlyData.jobsAttachedParts)).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -134,6 +137,10 @@ export const ReportsPage: React.FC = () => {
                   <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {monthlyData.ownerGrossProfit.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <p className="text-xs text-blue-300/70 mt-2">Bike Sale + Part Sale + Attached Parts for Repairs</p>
                 </div>
+                <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-1">
+                  <p className="text-sm text-blue-400 font-semibold mb-1">Purchased Cost (Inventory)</p>
+                  <p className={`text-4xl font-bold 'text-white'`}>Rs. {fmt(monthlyData.totalPurchaseCost)}</p>
+                </div>
               </div>
 
               <div className="card h-68">
@@ -142,7 +149,7 @@ export const ReportsPage: React.FC = () => {
                   <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                     <XAxis dataKey="name" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" tickFormatter={(value) => `Rs.${value}`} />
+                    <YAxis stroke="#94a3b8" tickFormatter={(value) => `${value}`} />
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
                       itemStyle={{ color: '#fff' }}

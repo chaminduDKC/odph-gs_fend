@@ -46,6 +46,7 @@ export const Layout: React.FC = () => {
     {
       title: 'HR',
       items: [
+        { path: '/ledger', label: 'Ledger', icon: UserCircle },
         { path: '/workers', label: 'Workers', icon: UserCircle },
         { path: '/attendance', label: 'Attendance', icon: Calendar },
         { path: '/salary', label: 'Salary', icon: CreditCard },
@@ -87,13 +88,13 @@ export const Layout: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto py-4 no-drag">
           {navGroups.map((group, idx) => (
-            <div key={idx} className="mb-6">
+            <div key={idx} className="mb-4">
               {!isCollapsed && (
                 <div className="px-4 mb-2 text-xs font-semibold text-[var(--color-text-muted)] tracking-wider">
                   {group.title}
                 </div>
               )}
-              <nav className="space-y-1 px-2">
+              <nav className="space-y-1 px-1">
                 {group.items.map((item) => (
                   <NavLink
                     key={item.path}

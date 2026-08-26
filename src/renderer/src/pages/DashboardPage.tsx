@@ -48,6 +48,10 @@ export const DashboardPage: React.FC = () => {
     }
   ]
 
+  const fmt = (price:string | number)=>{
+    return Number(price).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})
+  }
+
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader title="Dashboard" subtitle="Overview of your garage operations" />
@@ -87,20 +91,20 @@ export const DashboardPage: React.FC = () => {
 
         <StatCard 
           title="Today Bike Sales" 
-          value={Number(data.revenueBreakdown.bicycleRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
+          value={fmt(data.revenueBreakdown.bicycleRevenue)} 
           icon={ Bike } 
           colorClass="text-blue-500" 
         />
         <StatCard 
           title="Attached Parts Revenue (Repaired Vehicles)" 
-          value={Number(data.totalCostForAttachedParts).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
+          value={fmt(data.totalCostForAttachedParts)} 
           icon={ Wrench } 
           colorClass="text-blue-500" 
         />
 
         <StatCard 
           title="Today Part Sales" 
-          value={Number(data.revenueBreakdown.partsRevenue).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})} 
+          value={fmt(data.revenueBreakdown.partsRevenue)} 
           icon={ CogIcon } 
           colorClass="text-white-500" 
         />
@@ -123,6 +127,7 @@ export const DashboardPage: React.FC = () => {
           icon={AlertTriangle} 
           colorClass="text-red-500" 
         />
+       
         <StatCard 
           title="Staff Present Today" 
           value={data.presentTodayCount} 
@@ -131,7 +136,7 @@ export const DashboardPage: React.FC = () => {
         />
         <StatCard 
           title="Supplier Dues" 
-          value={`Rs. ${Number(data.supplierDuesOutstanding).toLocaleString()}`}
+          value={fmt(data.supplierDuesOutstanding)}
           icon={FileText} 
           colorClass="text-yellow-500" 
         />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { salesApi } from '../api/sales'
 import { inventoryApi } from '../api/inventory'
 import { customersApi } from '../api/customers'
@@ -8,12 +8,14 @@ import { PageHeader } from '../components/PageHeader'
 import { DataTable, Column } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { PartSale } from '@shared/types'
 
 export const SalesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   
   const { data: salesData, isLoading } = useQuery({
@@ -52,6 +54,16 @@ export const SalesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       closeModal()
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: salesApi.deleteSale,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setDeleteId(null)
     }
   })
 
@@ -94,6 +106,20 @@ export const SalesPage: React.FC = () => {
         const profit = Number(row.profit)
         return <span className={`font-medium ${profit > 0 ? 'text-green-500' : profit < 0 ? 'text-red-500' : ''}`}>Rs. {profit.toFixed(2)}</span>
       }
+    },
+    {
+      header: 'Actions',
+      cell: ({ row }) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDeleteId(row.id)}
+            className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
+            title="Delete Sale"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      )
     }
   ]
   
@@ -109,6 +135,15 @@ export const SalesPage: React.FC = () => {
             <Plus size={18} /> New Sale
           </button>
         }
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
+        title="Delete Sale Record"
+        message="Are you sure you want to delete this sale record? The sold quantity will be returned to inventory stock."
+        isLoading={deleteMutation.isPending}
       />
 
       <DataTable data={salesData?.data ?? []} columns={columns} isLoading={isLoading} />

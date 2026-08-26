@@ -20,6 +20,7 @@ import { AttendancePage } from './pages/AttendancePage'
 import { SalaryPage } from './pages/SalaryPage'
 import { PaysheetPage } from './pages/PaysheetPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { Ledger } from './pages/Ledger'
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading, initAuth } = useAuthStore()
@@ -60,6 +61,7 @@ const App: React.FC = () => {
         <Route path="purchases" element={<PurchasesPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="bicycles" element={<BicyclesPage />} />
+        <Route path="ledger" element={<Ledger />} />
         <Route path="workers" element={<WorkersPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="salary" element={<SalaryPage />} />

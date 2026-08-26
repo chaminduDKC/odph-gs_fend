@@ -26,6 +26,7 @@ export const InventoryPage: React.FC = () => {
   const [category, setCategory] = useState('')
   const [unitCost, setUnitCost] = useState('0')
   const [sellingPrice, setSellingPrice] = useState('0')
+  const [amountPaid, setAmountPaid] = useState('0')
   const [quantity, setQuantity] = useState('0')
   const [reorderLevel, setReorderLevel] = useState('5')
   const [supplierId, setSupplierId] = useState('')
@@ -147,11 +148,11 @@ export const InventoryPage: React.FC = () => {
     <div className="animate-fade-in">
       <PageHeader 
         title="Inventory" 
-        action={
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={18} /> Add Item
-          </button>
-        }
+        // action={
+        //   <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+        //     <Plus size={18} /> Add Item
+        //   </button>
+        // }
       />
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-between items-start sm:items-center">
@@ -184,7 +185,14 @@ export const InventoryPage: React.FC = () => {
         title={editingItem ? "Edit Item" : "Add Item"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <FormField autoFocus label="Item Name" required value={name} onChange={e => setName(e.target.value)} />
+
+           <FormField autoFocus label="Preferred Supplier" as="select" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+              <option value="">--Select a Supplier</option>
+              {suppliers.map((s:any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </FormField>
+          <FormField label="Item Name" required value={name} onChange={e => setName(e.target.value)} />
 
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Category (Optional)" value={category} onChange={e => setCategory(e.target.value)} />
@@ -198,12 +206,7 @@ export const InventoryPage: React.FC = () => {
           
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Reorder Level" type="number" required min="0" value={reorderLevel} onChange={e => setReorderLevel(e.target.value)} />
-            <FormField label="Preferred Supplier" as="select" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-              <option value="">None</option>
-              {suppliers.map((s:any) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </FormField>
+            <FormField label="Paid Amount (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} />
           </div>
 
           <div className="flex justify-end gap-3 mt-6">

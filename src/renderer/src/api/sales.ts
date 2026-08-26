@@ -10,5 +10,9 @@ export const salesApi = {
   createSale: async (data: CreatePartSaleRequest): Promise<PartSale> => {
     const response = await apiClient.post<PartSale>('/sales', data)
     return response.data
+  },
+
+  deleteSale: async (id: string): Promise<void> => {
+    await apiClient.delete(`/sales/${id}`)
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, DollarSign,Trash2, ShieldCheck } from 'lucide-react'
+import { Plus, Eye, DollarSign, Trash2, ShieldCheck } from 'lucide-react'
 import { bicyclesApi } from '../api/bicycles'
 import { PageHeader } from '../components/PageHeader'
 import { DataTable, Column } from '../components/DataTable'
@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Bicycle, BicycleStatus } from '@shared/types'
 import { inventoryApi } from '@renderer/api/inventory'
 
@@ -17,6 +18,7 @@ export const BicyclesPage: React.FC = () => {
   const [page, setPage] = useState(1)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [viewId, setViewId] = useState<string | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isSellOpen, setIsSellOpen] = useState(false)
   
   // Add Form
@@ -64,9 +66,6 @@ export const BicyclesPage: React.FC = () => {
     enabled: !!viewId
   })
 
-  if(viewBicycle){
-    console.log(viewBicycle)
-  }
   const createMutation = useMutation({
     mutationFn: bicyclesApi.createBicycle,
     onSuccess: () => {
@@ -75,9 +74,18 @@ export const BicyclesPage: React.FC = () => {
     }
   })
 
-  if(viewBicycle){
-    console.log(viewBicycle)
-  }
+  const deleteMutation = useMutation({
+    mutationFn: bicyclesApi.deleteBicycle,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bicycles'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      if (viewId === deleteId) {
+        setViewId(null)
+      }
+      setDeleteId(null)
+    }
+  })
 
   const statusMutation = useMutation({
     mutationFn: (data: { id: string; status: BicycleStatus }) =>
@@ -88,12 +96,11 @@ export const BicyclesPage: React.FC = () => {
     }
   })
 
-  // ✅ FIX 1: invalidate using viewId (string), not viewBicycle (object)
   const addPartMutation = useMutation({
     mutationFn: (data: { id: string; itemId: string; quantity: number }) =>
       bicyclesApi.addBicyclePart(data.id, { itemId: data.itemId, quantity: data.quantity }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bicycle', viewId] }) // ✅ fixed
+      queryClient.invalidateQueries({ queryKey: ['bicycle', viewId] })
       queryClient.invalidateQueries({ queryKey: ['bicycles'] })
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       setPartItemId('')
@@ -104,14 +111,16 @@ export const BicyclesPage: React.FC = () => {
     }
   })
 
-    const removePartMutation = useMutation({
-      mutationFn: (data: { bicycleId: string; partId: string }) =>
-        bicyclesApi.removeBicyclePart(data.bicycleId, data.partId),
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['bicycle', viewId] })
-        queryClient.invalidateQueries({ queryKey: ['bicycles'] })
-      }
-    })
+  const removePartMutation = useMutation({
+    mutationFn: (data: { bicycleId: string; partId: string }) =>
+      bicyclesApi.removeBicyclePart(data.bicycleId, data.partId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bicycle', viewId] })
+      queryClient.invalidateQueries({ queryKey: ['bicycles'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    }
+  })
+
   const expenseMutation = useMutation({
     mutationFn: (data: { id: string; desc: string; amount: number }) =>
       bicyclesApi.addExpense(data.id, { description: data.desc, amount: data.amount }),
@@ -159,12 +168,22 @@ export const BicyclesPage: React.FC = () => {
     {
       header: 'Actions',
       cell: ({ row }) => (
-        <button
-          className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20"
-          onClick={() => setViewId(row.id)}
-        >
-          <Eye size={16} />
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20 transition-colors"
+            onClick={() => setViewId(row.id)}
+            title="View Details"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
+            onClick={() => setDeleteId(row.id)}
+            title="Delete Bicycle"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       )
     }
   ]
@@ -203,6 +222,15 @@ export const BicyclesPage: React.FC = () => {
           </button>
         ))}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
+        title="Delete Bicycle"
+        message="Are you sure you want to delete this bicycle record? Any attached parts will be returned to inventory stock."
+        isLoading={deleteMutation.isPending}
+      />
 
       <DataTable data={bicycleData?.data ?? []} columns={columns} isLoading={isLoading} />
 
@@ -493,6 +521,16 @@ export const BicyclesPage: React.FC = () => {
                     )}
                   </div>
                 )}
+
+                <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex justify-end">
+                  <button
+                    type="button"
+                    className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-1.5 px-3 flex items-center gap-1.5 transition-colors"
+                    onClick={() => setDeleteId(viewBicycle.id)}
+                  >
+                    <Trash2 size={14} /> Delete Bicycle
+                  </button>
+                </div>
               </div>
             </div>
           </div>
