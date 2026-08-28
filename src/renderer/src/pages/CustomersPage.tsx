@@ -12,6 +12,7 @@ import { Pagination } from '../components/Pagination'
 import { Customer, Vehicle } from '@shared/types'
 import { isAxiosError } from 'axios'
 import { MessageDialog } from '@renderer/components/MessageDialog'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const CustomersPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -22,6 +23,14 @@ export const CustomersPage: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
+
+  useF1Shortcut(() => {
+    setEditingCustomer(null)
+    setName('')
+    setPhone('')
+    setAddress('')
+    setIsModalOpen(true)
+  }, isModalOpen || isViewOpen || !!deleteId || !!messageDialog)
   
   // Form state
   const [name, setName] = useState('')

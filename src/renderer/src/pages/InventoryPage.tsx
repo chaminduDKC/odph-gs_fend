@@ -11,6 +11,8 @@ import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { InventoryItem } from '@shared/types'
+import { MessageDialog } from '@renderer/components/MessageDialog'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -20,6 +22,20 @@ export const InventoryPage: React.FC = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
+
+  useF1Shortcut(() => {
+    setEditingItem(null)
+    setName('')
+    setCategory('')
+    setQuantity('0')
+    setUnitCost('0')
+    setSellingPrice('0')
+    setAmountPaid('0')
+    setReorderLevel('5')
+    setSupplierId('')
+    setIsModalOpen(true)
+  }, isModalOpen || !!deleteId || !!messageDialog)
 
   // Form State
   const [name, setName] = useState('')
@@ -30,6 +46,7 @@ export const InventoryPage: React.FC = () => {
   const [quantity, setQuantity] = useState('0')
   const [reorderLevel, setReorderLevel] = useState('5')
   const [supplierId, setSupplierId] = useState('')
+
 
   useEffect(() => {
     setPage(1)
@@ -65,14 +82,24 @@ export const InventoryPage: React.FC = () => {
     }
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: inventoryApi.deleteItem,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      setDeleteId(null)
+const deleteMutation = useMutation({
+  mutationFn: inventoryApi.deleteItem,
+  onSuccess: (data) => {
+    queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    setDeleteId(null)
+
+    if (data?.message) {
+      setMessageDialog({ type: 'success', title: '', message: data?.message})
+    } else {
+      setMessageDialog({ type: 'success', title: '', message: "Item deleted"})
     }
-  })
+  },
+  onError: (error) => {
+    console.log(error)
+    
+  }
+})
 
   const handleEdit = (item: InventoryItem) => {
     setEditingItem(item)
@@ -154,7 +181,15 @@ export const InventoryPage: React.FC = () => {
         //   </button>
         // }
       />
-
+      {messageDialog && (
+              <MessageDialog
+                isOpen={true}
+                onClose={() => setMessageDialog(null)}
+                type={messageDialog.type}
+                title={messageDialog.title}
+                message={messageDialog.message}
+              />
+            )}
       <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-between items-start sm:items-center">
         <SearchInput value={search} onChange={setSearch} placeholder="Search parts/items..." />
         

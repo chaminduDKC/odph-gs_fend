@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { Supplier, PurchaseTransaction } from '@shared/types'
 import { StatusBadge } from '../components/StatusBadge'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const SuppliersPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -20,6 +21,13 @@ export const SuppliersPage: React.FC = () => {
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+
+  useF1Shortcut(() => {
+    setEditingSupplier(null)
+    setName('')
+    setContact('')
+    setIsModalOpen(true)
+  }, isModalOpen || isViewOpen || !!deleteId)
 
   // Form State
   const [name, setName] = useState('')

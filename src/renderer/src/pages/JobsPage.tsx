@@ -15,6 +15,7 @@ import { Job, JobStatus, PaymentStatus } from '@shared/types'
 import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
 import { isAxiosError } from 'axios'
 import { MessageDialog } from '@renderer/components/MessageDialog'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const JobsPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -41,6 +42,11 @@ export const JobsPage: React.FC = () => {
   const [isEditLaborOpen, setIsEditLaborOpen] = useState(false)
   const [editLaborValue, setEditLaborValue] = useState('0')
   const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
+
+  useF1Shortcut(() => {
+    resetForm()
+    setIsNewOpen(true)
+  }, isNewOpen || !!viewJobId || isEditLaborOpen || !!deletingId || !!messageDialog)
 
   useEffect(() => {
     setPage(1)
@@ -351,7 +357,7 @@ export const JobsPage: React.FC = () => {
                   <StatusBadge status={jobDetails.paymentStatus} type="payment" />
                   <p className="text-xs text-[var(--color-text-muted)] mt-2 mb-1">Mark payment as:</p>
                   <div className="flex flex-wrap gap-1">
-                    {(['DUE', 'PARTIAL', 'PAID'] as PaymentStatus[]).map((st) => (
+                    {(['DUE', 'PAID'] as PaymentStatus[]).map((st) => (
                       <button
                         key={st}
                         disabled={jobDetails.paymentStatus === st || statusMutation.isPending}
@@ -365,7 +371,7 @@ export const JobsPage: React.FC = () => {
                         }`}
                       >
                         
-                        {st === 'PAID' ? '✓ Mark PAID' : st === 'PARTIAL' ? '½ Partial' : 'DUE'}
+                        {st === 'PAID' ? '✓ Mark PAID' : 'DUE'}
                       </button>
                     ))}
                   </div>

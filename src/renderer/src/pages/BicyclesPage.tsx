@@ -11,6 +11,7 @@ import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Bicycle, BicycleStatus } from '@shared/types'
 import { inventoryApi } from '@renderer/api/inventory'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const BicyclesPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -20,6 +21,13 @@ export const BicyclesPage: React.FC = () => {
   const [viewId, setViewId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isSellOpen, setIsSellOpen] = useState(false)
+
+  useF1Shortcut(() => {
+    setDescription('')
+    setBoughtPrice('0')
+    setBoughtDate(new Date().toISOString().split('T')[0])
+    setIsAddOpen(true)
+  }, isAddOpen || !!viewId || !!deleteId || isSellOpen)
   
   // Add Form
   const [description, setDescription] = useState('')

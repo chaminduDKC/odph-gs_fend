@@ -42,8 +42,12 @@ const TYPE_LABELS: Record<LedgerTransactionType, string> = {
   REPAIR_INCOME: 'Repair Income',
   REPAIRED_PARTS_INCOME: 'Parts Sale Income',
   INVENTORY_PURCHASES: 'Inventory Purchase',
+  BIKE_PURCHASE: 'Bike Purchase',
   SUPPLIER_PAYMENT: 'Supplier Payment',
   SALARY_PAYMENTS: 'Salary Payment',
+  REVERSAL: 'Reversal',
+  PARTS_SALE_INCOME: 'Part Sale Income',
+  BIKE_SALE_INCOME: 'Bike Sale Income',
 }
 
 const TYPE_OPTIONS: { value: LedgerTransactionType; label: string; flow: 'IN' | 'OUT' }[] = [
@@ -55,7 +59,11 @@ const TYPE_OPTIONS: { value: LedgerTransactionType; label: string; flow: 'IN' | 
   { value: 'REPAIR_INCOME', label: 'Repair Income', flow: 'IN' },
   { value: 'REPAIRED_PARTS_INCOME', label: 'Parts Sale Income', flow: 'IN' },
   { value: 'INVENTORY_PURCHASES', label: 'Inventory Purchase', flow: 'OUT' },
+  { value: 'BIKE_PURCHASE', label: 'Bike Purchase', flow: 'OUT' },
   { value: 'SALARY_PAYMENTS', label: 'Salary Payment', flow: 'OUT' },
+  { value: 'REVERSAL', label: 'Reverse', flow: 'OUT' },
+  { value: 'PARTS_SALE_INCOME', label: 'Part Sale', flow: 'IN' },
+  { value: 'BIKE_SALE_INCOME', label: 'Bike Sale', flow: 'IN' },
 ]
 
 const EXPENSE_CATEGORIES = [
@@ -88,7 +96,11 @@ function getTypeColor(type: LedgerTransactionType) {
     case 'REPAIR_INCOME': return 'bg-emerald-500/20 text-emerald-300'
     case 'REPAIRED_PARTS_INCOME': return 'bg-teal-500/20 text-teal-300'
     case 'INVENTORY_PURCHASES': return 'bg-rose-500/20 text-rose-300'
+    case 'BIKE_PURCHASES': return 'bg-rose-500/20 text-rose-300'
     case 'SALARY_PAYMENTS': return 'bg-amber-500/20 text-amber-300'
+    case 'REVERSAL': return 'bg-red-500/20 text-red-300'
+    case 'PARTS_SALE_INCOME': return 'bg-green-500/20 text-green-300'
+    case 'BIKE_SALE_INCOME': return 'bg-green-500/20 text-green-300'
     default: return 'bg-gray-500/20 text-gray-300'
   }
 }
@@ -150,6 +162,7 @@ export const Ledger: React.FC = () => {
     queryFn: ledgerApi.getSummary,
   })
 
+  
   const { data: entriesData, isLoading: entriesLoading } = useQuery({
     queryKey: ['ledger-entries', page, filterAccount, filterType, search, dateFrom, dateTo],
     queryFn: () =>
@@ -162,7 +175,8 @@ export const Ledger: React.FC = () => {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       }),
-  })
+    })
+    console.log(entriesData);
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
 
@@ -432,7 +446,7 @@ export const Ledger: React.FC = () => {
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Date</th>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Account</th>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Description</th>
+                    <th className="text-left py-3 px-4 font-semibold w-110 text-[var(--color-text-secondary)]">Description</th>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Category</th>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Reference</th>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Source</th>

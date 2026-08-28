@@ -31,7 +31,8 @@ export const inventoryApi = {
     return response.data
   },
 
-  deleteItem: async (id: string): Promise<void> => {
-    await apiClient.delete(`/inventory/${id}`)
-  }
+  deleteItem: async (id: string): Promise<{ message?: string; item?: unknown } | void> => {
+  const response = await apiClient.delete(`/inventory/${id}`)
+  return response.data 
+}
 }

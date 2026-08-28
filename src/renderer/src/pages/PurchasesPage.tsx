@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
 import { PurchaseTransaction, PurchaseType } from '@shared/types'
 import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 interface PurchaseLineItemState {
   id: string
@@ -64,6 +65,7 @@ export const PurchasesPage: React.FC = () => {
   // Form State
   const [supplierId, setSupplierId] = useState('')
   const [purchaseId, setPurchaseId] = useState('')
+  const [purchase, setPurchase] = useState<any>()
   const [paymentType, setPaymentType] = useState<PurchaseType>('CREDIT')
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [amountPaid, setAmountPaid] = useState('0')
@@ -78,6 +80,10 @@ export const PurchasesPage: React.FC = () => {
   })
   const [deletingId, setDeletingId] = useState('')
   const [lineItems, setLineItems] = useState<PurchaseLineItemState[]>([])
+
+  useF1Shortcut(() => {
+    setIsModalOpen(true)
+  }, isModalOpen || isViewOpen || !!deletingId)
 
   const createMutation = useMutation({
     mutationFn: purchasesApi.createPurchase,
@@ -134,6 +140,8 @@ export const PurchasesPage: React.FC = () => {
   }
 
   const handleEdit = (row: PurchaseTransaction) => {
+    console.log(row);
+    setPurchase(row)
     setSupplierId(row.supplierId)
     setPurchaseId(row.id)
     setPaymentType(row.paymentType)
@@ -318,19 +326,19 @@ export const PurchasesPage: React.FC = () => {
             <div className='text-right'>
               <div className="text-xs text-[var(--color-text-secondary)]">Amount Due</div>
 
-              {totalPayment - Number(amountPaid) <= Number(amountToPaid) ? (<p  className="text-xl font-bold text-green-500">Paid</p>) : (<p className="text-xl font-bold text-red-500">Rs. {(totalPayment - Number(amountPaid)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>)}
+              {purchase?.amountDue === '0' ? (<p  className="text-xl font-bold text-green-500">Paid</p>) : (<p className="text-xl font-bold text-red-500">Rs. {(totalPayment - Number(amountPaid)).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>)}
               
             </div>
               
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Amount Paid (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} disabled onChange={e => setAmountPaid(e.target.value)} />
-            <FormField disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid)} label="Add New Payment (Rs.)" type="number" required min="0" max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
+            <FormField label="Add New Payment (Rs.)" type="number" required min="0" disabled={purchase?.amountDue === '0'} max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
           </div>
 
           <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
             <button type="button" className="btn btn-secondary ml-4" onClick={closeViewModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) <= Number(amountToPaid) || updatePaymentMutation.isPending}>
+            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) < Number(amountToPaid) || purchase?.amountDue === '0' || updatePaymentMutation.isPending}>
               {updatePaymentMutation.isPending ? 'Updating...' : 'Update Purchase'}
             </button>
           </div>

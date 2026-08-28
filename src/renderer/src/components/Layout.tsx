@@ -66,21 +66,32 @@ export const Layout: React.FC = () => {
       {/* Sidebar */}
       <aside 
         className={`flex flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-secondary)] transition-all duration-300 ${
-          isCollapsed ? 'w-[68px]' : 'w-60'
+          isCollapsed ? 'w-[68px]' : 'w-50'
         }`}
       >
-        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-border)] no-drag">
-          {!isCollapsed && (
-            <div className="flex items-center gap-2 font-bold text-lg text-white">
-            
-              <img src={Logo} alt="logo" className="w-10 h-10 rounded-full text-[var(--color-accent)]" />
-              <span>Admin</span>
-            </div>
-          )}
-          {isCollapsed &&  <img src={Logo} alt="logo" className="w-5 h-5 rounded-full text-[var(--color-accent)]" />}
+        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-border)] no-drag overflow-hidden">
+          <div className="flex items-center gap-2 font-bold text-lg text-white overflow-hidden">
+            {!isCollapsed && (
+            <img
+              src={Logo}
+              alt="logo"
+              className={`rounded-full text-[var(--color-accent)] transition-all duration-300 flex-shrink-0 ${
+                isCollapsed ? 'display-none' : 'w-10 h-10'
+              }`}
+            />
+            )}
+           
+            <span
+              className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[140px] opacity-100'
+              }`}
+            >
+              Admin
+            </span>
+          </div>
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded hover:bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] no-drag"
+            className="p-1 rounded hover:bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] no-drag flex-shrink-0"
           >
             {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
@@ -89,11 +100,13 @@ export const Layout: React.FC = () => {
         <div className="flex-1 overflow-y-auto py-4 no-drag">
           {navGroups.map((group, idx) => (
             <div key={idx} className="mb-4">
-              {!isCollapsed && (
-                <div className="px-4 mb-2 text-xs font-semibold text-[var(--color-text-muted)] tracking-wider">
-                  {group.title}
-                </div>
-              )}
+              <div
+                className={`px-4 mb-2 text-xs font-semibold text-[var(--color-text-muted)] tracking-wider whitespace-nowrap overflow-hidden transition-all duration-300 ${
+                  isCollapsed ? 'max-h-0 opacity-0 mb-0' : 'max-h-5 opacity-100'
+                }`}
+              >
+                {group.title}
+              </div>
               <nav className="space-y-1 px-1">
                 {group.items.map((item) => (
                   <NavLink
@@ -101,15 +114,21 @@ export const Layout: React.FC = () => {
                     to={item.path}
                     title={isCollapsed ? item.label : undefined}
                     className={({ isActive }) => `
-                      flex items-center gap-3 px-3 py-2 rounded-md transition-colors
+                      flex items-center gap-3 px-3 py-2 rounded-md transition-colors overflow-hidden
                       ${isActive 
                         ? 'bg-[rgba(245,158,11,0.1)] text-[var(--color-accent)]' 
                         : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-primary)] hover:text-white'
                       }
                     `}
                   >
-                    <item.icon size={20} className={isCollapsed ? 'mx-auto' : ''} />
-                    {!isCollapsed && <span>{item.label}</span>}
+                    <item.icon size={20} className="flex-shrink-0" />
+                    <span
+                      className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                        isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[160px] opacity-100'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
                   </NavLink>
                 ))}
               </nav>
@@ -117,18 +136,28 @@ export const Layout: React.FC = () => {
           ))}
         </div>
 
-        <div className="p-4 border-t border-[var(--color-border)] no-drag">
+        <div className="p-4 border-t border-[var(--color-border)] no-drag overflow-hidden">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-            {!isCollapsed && (
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-medium text-white truncate">{user?.username}</span>
-                <span className="text-xs text-[var(--color-text-muted)] capitalize">{user?.role.toLowerCase()}</span>
-              </div>
-            )}
+            <div className="flex flex-col overflow-hidden">
+              <span
+                className={`text-sm font-medium text-white truncate whitespace-nowrap transition-all duration-300 ${
+                  isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[140px] opacity-100'
+                }`}
+              >
+                {user?.username}
+              </span>
+              <span
+                className={`text-xs text-[var(--color-text-muted)] capitalize truncate whitespace-nowrap transition-all duration-300 ${
+                  isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[140px] opacity-100'
+                }`}
+              >
+                {user?.role.toLowerCase()}
+              </span>
+            </div>
             <button 
               onClick={handleLogout}
               title="Logout"
-              className="p-2 rounded-md text-[var(--color-text-secondary)] hover:bg-red-500/10 hover:text-red-500 transition-colors"
+              className="p-2 rounded-md text-[var(--color-text-secondary)] hover:bg-red-500/10 hover:text-red-500 transition-colors flex-shrink-0"
             >
               <LogOut size={18} />
             </button>

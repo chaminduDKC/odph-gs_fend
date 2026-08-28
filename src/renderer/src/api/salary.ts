@@ -23,5 +23,11 @@ export const salaryApi = {
   getSalary: async (workerId: string, month: string): Promise<MonthlySalary> => {
     const response = await apiClient.get<MonthlySalary>(`/salary/${workerId}/${month}/saved`)
     return response.data
+  },
+
+  // Toggle or update paid status on MonthlySalary record
+  togglePaid: async (workerId: string, month: string, isPaid?: boolean): Promise<MonthlySalary> => {
+    const response = await apiClient.patch<MonthlySalary>(`/salary/${workerId}/${month}/paid`, { isPaid })
+    return response.data
   }
 }

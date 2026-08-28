@@ -11,12 +11,21 @@ import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { PartSale } from '@shared/types'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const SalesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+
+  useF1Shortcut(() => {
+    setItemId('')
+    setQuantity('1')
+    setSoldPrice('0')
+    setCustomerId('')
+    setIsModalOpen(true)
+  }, isModalOpen || !!deleteId)
   
   const { data: salesData, isLoading } = useQuery({
     queryKey: ['sales', page],

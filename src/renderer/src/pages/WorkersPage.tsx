@@ -10,6 +10,7 @@ import { FormField } from '../components/FormField'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Pagination } from '../components/Pagination'
 import { Worker, SalaryType } from '@shared/types'
+import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 export const WorkersPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -18,6 +19,18 @@ export const WorkersPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
+
+  useF1Shortcut(() => {
+    setEditingWorker(null)
+    setName('')
+    setContact('')
+    setRole('')
+    setJoinDate(new Date().toISOString().split('T')[0])
+    setSalaryType('DAILY')
+    setBaseRate('0')
+    setActive(true)
+    setIsModalOpen(true)
+  }, isModalOpen || !!deleteId)
 
   // Form State
   const [name, setName] = useState('')
