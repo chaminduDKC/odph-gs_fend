@@ -8,6 +8,51 @@ import { DataTable, Column } from '../components/DataTable'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { InventoryItem, Supplier } from '@shared/types'
 
+
+type Tone = 'green' | 'red' | 'blue' | 'neutral'
+
+const toneStyles: Record<Tone, { card: string; title: string; sub: string }> = {
+  green:   { card: 'bg-green-500/10 border-green-500/20', title: 'text-green-400', sub: 'text-green-300/70' },
+  red:     { card: 'bg-red-500/10 border-red-500/20',     title: 'text-red-400',   sub: 'text-red-300/70' },
+  blue:    { card: 'bg-blue-500/10 border-blue-500/20',   title: 'text-blue-400',  sub: 'text-blue-300/70' },
+  neutral: { card: 'bg-slate-500/10 border-slate-500/20', title: 'text-slate-300', sub: 'text-slate-400' }
+}
+
+const money = (v: string | number) =>
+  Number(v).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+interface StatCardProps {
+  title: string
+  value: number
+  tone: Tone
+  note?: string
+  rows?: { label: string; value: number }[]
+  big?: boolean
+  className?: string
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, tone, note, rows, big, className = '' }) => {
+  const t = toneStyles[tone]
+  return (
+    <div className={`card ${t.card} ${className}`}>
+      <p className={`text-sm font-semibold mb-1 ${t.title}`}>{title}</p>
+      <p className={`${big ? 'text-4xl' : 'text-3xl'} font-bold ${value < 0 ? 'text-red-400' : 'text-white'}`}>
+        Rs. {money(value)}
+      </p>
+      {note && <p className={`text-xs mt-2 ${t.sub}`}>{note}</p>}
+      {rows && (
+        <div className={`mt-2 space-y-0.5 text-xs ${t.sub}`}>
+          {rows.map(r => (
+            <div key={r.label} className="flex justify-between">
+              <span>{r.label}</span><span>Rs. {money(r.value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const ReportsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'monthly' | 'inventory' | 'suppliers'>('monthly')
   const today = new Date()
@@ -59,6 +104,9 @@ export const ReportsPage: React.FC = () => {
    const fmt = (price:string | number)=>{
     return Number(price).toLocaleString('en-LK', {minimumFractionDigits:2, maximumFractionDigits:2})
   }
+  const garageProfit = monthlyData ? Number(monthlyData.jobsLaborCost) - Number(monthlyData.netSalaryPaidMonth) : 0
+  const ownerProfit = monthlyData ? Number(monthlyData.ownerGrossProfit) : 0
+  const netProfit = garageProfit + ownerProfit
 
   return (
     <div className="animate-fade-in pb-10">
@@ -92,54 +140,83 @@ export const ReportsPage: React.FC = () => {
 
           {monthlyLoading ? <LoadingSpinner /> : monthlyData && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-                <div className="card bg-green-500/10 border-green-500/20">
-                  <p className="text-sm text-green-400 font-semibold mb-1">Total Repair Revenue (Garage)</p>
-                  <p className="text-3xl font-bold text-white">Rs. {(Number(monthlyData.jobsRepairRevenue)- Number(monthlyData.jobsAttachedParts)).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+             {/* Bottom line first */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <StatCard
+                  big
+                  tone="blue"
+                  title="Net Profit"
+                  value={netProfit}
+                  note="Garage Profit + Owner Profit"
+                />
+                <StatCard
+                  big
+                  tone="blue"
+                  title="Garage Profit"
+                  value={garageProfit}
+                  note={`Labor income (Rs. ${money(monthlyData.jobsLaborCost)}) − Salaries (Rs. ${money(monthlyData.netSalaryPaidMonth)})`}
+                />
+                <StatCard
+                  big
+                  tone="blue"
+                  title="Owner Profit"
+                  value={ownerProfit}
+                  note="Profit on parts sold, bikes sold and parts attached to repairs"
+                />
+              </div>
+
+              {/* Where the money came from */}
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">Income sources</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatCard
+                    tone="green"
+                    title="Repair Labor Income"
+                    value={Number(monthlyData.jobsRepairRevenue) - Number(monthlyData.jobsAttachedParts)}
+                  />
+                  <StatCard
+                    tone="green"
+                    title="Parts Used in Repairs"
+                    value={monthlyData.jobsAttachedParts}
+                    rows={[
+                      { label: 'Parts cost', value: monthlyData.totalAttachedPartsCost },
+                      { label: 'Profit', value: monthlyData.jobsAttachedParts - monthlyData.totalAttachedPartsCost }
+                    ]}
+                  />
+                  <StatCard
+                    tone="green"
+                    title="Parts Sold"
+                    value={monthlyData.partsRevenue}
+                    rows={[
+                      { label: 'Parts cost', value: monthlyData.partsCost },
+                      { label: 'Profit', value: monthlyData.partsRevenue - monthlyData.partsCost }
+                    ]}
+                  />
+                  <StatCard
+                    tone="green"
+                    title="Bicycles Sold"
+                    value={monthlyData.bicycleRevenue}
+                    rows={[
+                      { label: 'Buying cost', value: monthlyData.bicycleCost },
+                      { label: 'Repair cost', value: monthlyData.bicycleRepairExpeses },
+                      { label: 'Parts cost', value: monthlyData.bicycleAttachedPartsCost },
+                      { label: 'Profit', value: monthlyData.bicycleProfit }
+                    ]}
+                  />
                 </div>
-                <div className="card bg-red-500/10 border-red-500/20">
-                  <p className="text-sm text-red-400 font-semibold mb-1">Parts Attached for Repair</p>
-                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.jobsAttachedParts.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
-                    <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.totalAttachedPartsCost.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Profit</span><span>Rs. {(monthlyData.jobsAttachedParts - monthlyData.totalAttachedPartsCost).toFixed(2)}</span></div>
-                  </div>
-                </div>
-                <div className="card bg-red-500/10 border-red-500/20">
-                  <p className="text-sm text-red-400 font-semibold mb-1">Parts Sale</p>
-                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.partsRevenue.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
-                    <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.partsCost.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Profit</span><span>Rs. {(monthlyData.partsRevenue - monthlyData.partsCost).toFixed(2)}</span></div>
-                  </div>
-                </div>
-                <div className="card bg-red-500/10 border-red-500/20">
-                  <p className="text-sm text-red-400 font-semibold mb-1">Bike Sale</p>
-                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.bicycleRevenue.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <div className="mt-2 space-y-0.5 text-xs text-red-300/70">
-                    <div className="flex justify-between"><span>Buying Cost</span><span>Rs. {monthlyData.bicycleCost.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Repair Cost</span><span>Rs. {monthlyData.bicycleRepairExpeses.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Parts cost</span><span>Rs. {monthlyData.bicycleAttachedPartsCost.toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span>Profit</span><span>Rs. {monthlyData.bicycleProfit.toFixed(2)}</span></div>
-                  </div>
-                </div>
-                <div className="card bg-red-500/10 border-red-500/20">
-                  <p className="text-sm text-red-400 font-semibold mb-1">Salary Payments</p>
-                  <p className="text-3xl font-bold text-white">Rs. {monthlyData.netSalaryPaidMonth.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-                <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-2">
-                  <p className="text-sm text-blue-400 font-semibold mb-1">Gross Profit(Garage) {monthlyData.jobsLaborCost} - {monthlyData.netSalaryPaidMonth}</p>
-                  <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {(monthlyData.jobsLaborCost - monthlyData.netSalaryPaidMonth ).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <p className="text-xs text-blue-300/70 mt-2">Revenue − Cost of Goods Sold</p>
-                </div>
-                <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-2">
-                  <p className="text-sm text-blue-400 font-semibold mb-1">Gross Profit(Owner)</p>
-                  <p className={`text-4xl font-bold ${monthlyData.grossProfit >= 0 ? 'text-white' : 'text-red-400'}`}>Rs. {monthlyData.ownerGrossProfit.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <p className="text-xs text-blue-300/70 mt-2">Bike Sale + Part Sale + Attached Parts for Repairs</p>
-                </div>
-                <div className="card bg-blue-500/10 border-blue-500/20 lg:col-span-1">
-                  <p className="text-sm text-blue-400 font-semibold mb-1">Purchased Cost (Inventory)</p>
-                  <p className={`text-4xl font-bold 'text-white'`}>Rs. {fmt(monthlyData.totalPurchaseCost)}</p>
+              </div>
+
+              {/* Money going out */}
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">Expenses & stock</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <StatCard tone="red" title="Salary Payments" value={monthlyData.netSalaryPaidMonth} />
+                  <StatCard
+                    tone="neutral"
+                    title="Stock Purchased"
+                    value={Number(monthlyData.totalPurchaseCost)}
+                    note="Inventory bought this month. Not the same as cost of goods sold."
+                  />
                 </div>
               </div>
 

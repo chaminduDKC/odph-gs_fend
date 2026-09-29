@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, DollarSign, Trash2, ShieldCheck } from 'lucide-react'
+import { Plus, Eye, DollarSign, Trash2, ShieldCheck, Trash, RotateCcw } from 'lucide-react'
 import { bicyclesApi } from '../api/bicycles'
 import { PageHeader } from '../components/PageHeader'
 import { DataTable, Column } from '../components/DataTable'
@@ -9,6 +9,8 @@ import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { MessageDialog } from '../components/MessageDialog'
+import { isAxiosError } from 'axios'
 import { Bicycle, BicycleStatus } from '@shared/types'
 import { inventoryApi } from '@renderer/api/inventory'
 import { useF1Shortcut } from '../hooks/useF1Shortcut'
@@ -20,14 +22,18 @@ export const BicyclesPage: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [viewId, setViewId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
   const [isSellOpen, setIsSellOpen] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
 
   useF1Shortcut(() => {
     setDescription('')
     setBoughtPrice('0')
     setBoughtDate(new Date().toISOString().split('T')[0])
     setIsAddOpen(true)
-  }, isAddOpen || !!viewId || !!deleteId || isSellOpen)
+  }, isAddOpen || !!viewId || !!deleteId || !!restoreId || !!permanentDeleteId || !!messageDialog || isSellOpen)
   
   // Add Form
   const [description, setDescription] = useState('')
@@ -47,21 +53,21 @@ export const BicyclesPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1)
-  }, [filterStatus])
+  }, [filterStatus, showDeleted])
 
   const { data: bicycleData, isLoading } = useQuery({
-    queryKey: ['bicycles', filterStatus, page],
-    queryFn: () => bicyclesApi.listBicycles(filterStatus as BicycleStatus || undefined, page)
+    queryKey: ['bicycles', filterStatus, page, showDeleted],
+    queryFn: () => bicyclesApi.listBicycles(filterStatus as BicycleStatus || undefined, page, 12, showDeleted)
   })
 
   useEffect(() => {
     if (bicycleData && page < bicycleData.totalPages) {
       queryClient.prefetchQuery({
-        queryKey: ['bicycles', filterStatus, page + 1],
-        queryFn: () => bicyclesApi.listBicycles(filterStatus as BicycleStatus || undefined, page + 1)
+        queryKey: ['bicycles', filterStatus, page + 1, showDeleted],
+        queryFn: () => bicyclesApi.listBicycles(filterStatus as BicycleStatus || undefined, page + 1, 12, showDeleted)
       })
     }
-  }, [bicycleData, page, filterStatus, queryClient])
+  }, [bicycleData, page, filterStatus, showDeleted, queryClient])
 
   const { data: items = [] } = useQuery({
     queryKey: ['inventory', 'all'],
@@ -92,6 +98,43 @@ export const BicyclesPage: React.FC = () => {
         setViewId(null)
       }
       setDeleteId(null)
+    }
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => bicyclesApi.restoreBicycle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bicycles'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setRestoreId(null)
+      setMessageDialog({ type: 'success', title: 'Restored', message: 'Bicycle restored successfully.' })
+    },
+    onError: (error: unknown) => {
+      setRestoreId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({ type: 'error', title: 'Cannot Restore', message: error.response?.data?.message || 'Failed to restore bicycle' })
+      }
+    }
+  })
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => bicyclesApi.permanentDeleteBicycle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bicycles'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      if (viewId === permanentDeleteId) {
+        setViewId(null)
+      }
+      setPermanentDeleteId(null)
+      setMessageDialog({ type: 'success', title: 'Permanently Deleted', message: 'Bicycle permanently deleted.' })
+    },
+    onError: (error: unknown) => {
+      setPermanentDeleteId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({ type: 'error', title: 'Cannot Delete Permanently', message: error.response?.data?.message || 'Failed to permanently delete bicycle' })
+      }
     }
   })
 
@@ -174,8 +217,38 @@ export const BicyclesPage: React.FC = () => {
       }
     },
     {
+      header: 'Status',
+      cell: ({ row }) => (row as any).isDeleted
+        ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400">Deleted</span>
+        : null
+    },
+    {
       header: 'Actions',
-      cell: ({ row }) => (
+      cell: ({ row }) => (row as any).isDeleted ? (
+        <div className="flex gap-2">
+          <button
+            className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20 transition-colors"
+            onClick={() => setViewId(row.id)}
+            title="View Details"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20 transition-colors"
+            onClick={() => setRestoreId(row.id)}
+            title="Restore Bicycle"
+          >
+            <RotateCcw size={16} />
+          </button>
+          <button
+            className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
+            onClick={() => setPermanentDeleteId(row.id)}
+            title="Delete Permanently"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ) : (
         <div className="flex gap-2">
           <button
             className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20 transition-colors"
@@ -209,9 +282,20 @@ export const BicyclesPage: React.FC = () => {
         title="Bicycles Project"
         subtitle="Manage buying, repairing, and selling of used bicycles"
         action={
-          <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
-            <Plus size={18} /> Buy Bicycle
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className={`btn ${showDeleted ? 'btn-danger' : 'btn-secondary'} flex items-center gap-2`}
+              onClick={() => { setShowDeleted(v => !v); setPage(1) }}
+            >
+              <Trash size={16} />
+              {showDeleted ? 'Hide Deleted' : 'Show Deleted'}
+            </button>
+            {!showDeleted && (
+              <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}>
+                <Plus size={18} /> Buy Bicycle
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -240,7 +324,15 @@ export const BicyclesPage: React.FC = () => {
         isLoading={deleteMutation.isPending}
       />
 
-      <DataTable data={bicycleData?.data ?? []} columns={columns} isLoading={isLoading} />
+      {showDeleted && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <Trash size={14} />
+          Showing deleted records. These are soft-deleted and no longer active.
+        </div>
+      )}
+
+      <DataTable data={bicycleData?.data ?? []} columns={columns} isLoading={isLoading} rowClassName={(row) => (row as any).isDeleted ? 'opacity-60 bg-red-500/5' : ''} />
+
 
       <Pagination
         page={page}
@@ -280,6 +372,12 @@ export const BicyclesPage: React.FC = () => {
       >
         {viewBicycle && (
           <div className="space-y-6">
+            {viewBicycle.isDeleted && (
+              <div className="px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+                <Trash2 size={16} />
+                <span>This bicycle is deleted. Details cannot be changed.</span>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <div className="card p-4">
                 <p className="text-xs text-[var(--color-text-muted)] mb-1">Status</p>
@@ -288,12 +386,14 @@ export const BicyclesPage: React.FC = () => {
                   {viewBicycle.status !== 'SOLD' && (
                     <div className="flex gap-1 mt-1">
                       <button
+                        disabled={viewBicycle.isDeleted || statusMutation.isPending}
                         onClick={() => statusMutation.mutate({ id: viewBicycle.id, status: 'IN_STOCK' })}
-                        className={`text-[10px] px-2 py-1 rounded border ${viewBicycle.status === 'IN_STOCK' ? 'border-info text-info bg-info/10' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}`}
+                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${viewBicycle.status === 'IN_STOCK' ? 'border-info text-info bg-info/10' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'} ${viewBicycle.isDeleted ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >IN STOCK</button>
                       <button
+                        disabled={viewBicycle.isDeleted || statusMutation.isPending}
                         onClick={() => statusMutation.mutate({ id: viewBicycle.id, status: 'UNDER_REPAIR' })}
-                        className={`text-[10px] px-2 py-1 rounded border ${viewBicycle.status === 'UNDER_REPAIR' ? 'border-warning text-warning bg-warning/10' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'}`}
+                        className={`text-[10px] px-2 py-1 rounded border transition-colors ${viewBicycle.status === 'UNDER_REPAIR' ? 'border-warning text-warning bg-warning/10' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'} ${viewBicycle.isDeleted ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >REPAIR</button>
                     </div>
                   )}
@@ -337,16 +437,14 @@ export const BicyclesPage: React.FC = () => {
                           <td className="py-2 text-right">
                             {viewBicycle.status !== "SOLD" && 
                               <button
-                            
-                              onClick={() => removePartMutation.mutate({ bicycleId: viewBicycle.id, partId: part.id })}
-                              disabled={removePartMutation.isPending}
-                              className="p-1 text-red-400 hover:bg-red-500/20 rounded transition-colors"
-                              title="Remove part"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                             }
-                            
+                                onClick={() => removePartMutation.mutate({ bicycleId: viewBicycle.id, partId: part.id })}
+                                disabled={viewBicycle.isDeleted || removePartMutation.isPending}
+                                className={`p-1 text-red-400 hover:bg-red-500/20 rounded transition-colors ${viewBicycle.isDeleted ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                title={viewBicycle.isDeleted ? "Cannot remove part from deleted bicycle" : "Remove part"}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            }
                           </td>
                         </tr>
                       ))}
@@ -356,16 +454,12 @@ export const BicyclesPage: React.FC = () => {
                   <p className="text-sm text-[var(--color-text-muted)] italic py-2">No parts attached yet.</p>
                 )}
 
-
-
-
-
-            
             {viewBicycle.status !== 'SOLD' && (
               <form
                 className="flex gap-2 mt-4 items-end bg-[var(--color-bg-secondary)] p-3 rounded border border-[var(--color-border)]"
                 onSubmit={e => {
                   e.preventDefault()
+                  if (viewBicycle.isDeleted) return
                   if (partItemId) {
                     addPartMutation.mutate({
                       id: viewBicycle.id,
@@ -378,10 +472,11 @@ export const BicyclesPage: React.FC = () => {
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">Select Part</label>
                   <select
-                    className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:border-[var(--color-accent)] outline-none"
+                    className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:border-[var(--color-accent)] outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     value={partItemId}
                     onChange={e => setPartItemId(e.target.value)}
                     required
+                    disabled={viewBicycle.isDeleted}
                   >
                     <option value="">-- Select Inventory Item --</option>
                     {items.map(item => (
@@ -399,11 +494,12 @@ export const BicyclesPage: React.FC = () => {
                     required
                     value={partQty}
                     onChange={e => setPartQty(e.target.value)}
-                    className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:border-[var(--color-accent)] outline-none"
+                    disabled={viewBicycle.isDeleted}
+                    className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-white focus:border-[var(--color-accent)] outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
                 {/* ✅ FIX 3: type="submit" now works because it's inside a <form> */}
-                <button type="submit" disabled={addPartMutation.isPending} className="btn btn-primary py-1.5 px-3 h-[34px]">
+                <button type="submit" disabled={viewBicycle.isDeleted || addPartMutation.isPending} className="btn btn-primary py-1.5 px-3 h-[34px] disabled:opacity-50 disabled:cursor-not-allowed">
                   <Plus size={16} /> Add Part
                 </button>
               </form>
@@ -432,6 +528,7 @@ export const BicyclesPage: React.FC = () => {
                       className="flex gap-2 p-2 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border)]"
                       onSubmit={e => {
                         e.preventDefault()
+                        if (viewBicycle.isDeleted) return
                         if (expDesc && expAmount) {
                           expenseMutation.mutate({ id: viewBicycle.id, desc: expDesc, amount: Number(expAmount) })
                         }
@@ -443,7 +540,8 @@ export const BicyclesPage: React.FC = () => {
                         required
                         value={expDesc}
                         onChange={e => setExpDesc(e.target.value)}
-                        className="w-full text-xs p-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-white outline-none focus:border-[var(--color-accent)]"
+                        disabled={viewBicycle.isDeleted}
+                        className="w-full text-xs p-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-white outline-none focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <input
                         type="number"
@@ -451,9 +549,10 @@ export const BicyclesPage: React.FC = () => {
                         required
                         value={expAmount}
                         onChange={e => setExpAmount(e.target.value)}
-                        className="w-20 text-xs p-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-white outline-none focus:border-[var(--color-accent)]"
+                        disabled={viewBicycle.isDeleted}
+                        className="w-20 text-xs p-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-white outline-none focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed"
                       />
-                      <button type="submit" disabled={expenseMutation.isPending} className="btn-primary p-1.5 rounded text-white flex items-center justify-center">
+                      <button type="submit" disabled={viewBicycle.isDeleted || expenseMutation.isPending} className="btn-primary p-1.5 rounded text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
                         <Plus size={14} />
                       </button>
                     </form>
@@ -512,7 +611,7 @@ export const BicyclesPage: React.FC = () => {
                 </div>
                 
 
-                {viewBicycle.status !== 'SOLD' && (
+                {!viewBicycle.isDeleted && viewBicycle.status !== 'SOLD' && (
                   <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
                     {!isSellOpen ? (
                       <button className="w-full btn btn-primary py-2" onClick={() => setIsSellOpen(true)}>
@@ -530,20 +629,54 @@ export const BicyclesPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex justify-end">
-                  <button
-                    type="button"
-                    className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-1.5 px-3 flex items-center gap-1.5 transition-colors"
-                    onClick={() => setDeleteId(viewBicycle.id)}
-                  >
-                    <Trash2 size={14} /> Delete Bicycle
-                  </button>
-                </div>
+                {!viewBicycle.isDeleted && (
+                  <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex justify-end">
+                    <button
+                      type="button"
+                      className="btn bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs py-1.5 px-3 flex items-center gap-1.5 transition-colors"
+                      onClick={() => setDeleteId(viewBicycle.id)}
+                    >
+                      <Trash2 size={14} /> Delete Bicycle
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!restoreId}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => restoreId && restoreMutation.mutate(restoreId)}
+        title="Restore Bicycle"
+        message="Are you sure you want to restore this bicycle? The bicycle record will become active again."
+        isLoading={restoreMutation.isPending}
+        confirmLabel="Restore"
+        confirmVariant="success"
+      />
+
+      <ConfirmDialog
+        isOpen={!!permanentDeleteId}
+        onClose={() => setPermanentDeleteId(null)}
+        onConfirm={() => permanentDeleteId && permanentDeleteMutation.mutate(permanentDeleteId)}
+        title="Delete Bicycle Permanently"
+        message="Are you sure you want to permanently delete this bicycle from the database? This action CANNOT be undone."
+        isLoading={permanentDeleteMutation.isPending}
+        confirmLabel="Delete Permanently"
+        confirmVariant="danger"
+      />
+
+      {messageDialog && (
+        <MessageDialog
+          isOpen={true}
+          onClose={() => setMessageDialog(null)}
+          type={messageDialog.type}
+          title={messageDialog.title}
+          message={messageDialog.message}
+        />
+      )}
     </div>
   )
 }

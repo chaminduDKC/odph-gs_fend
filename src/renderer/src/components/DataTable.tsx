@@ -13,9 +13,10 @@ interface DataTableProps<T> {
   data: T[]
   isLoading?: boolean
   emptyMessage?: string
+  rowClassName?: (row: T) => string
 }
 
-export function DataTable<T>({ columns, data, isLoading, emptyMessage = 'No data found' }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, isLoading, emptyMessage = 'No data found', rowClassName }: DataTableProps<T>) {
   if (isLoading) {
     return (
       <div className="w-full overflow-x-auto rounded-lg border border-[var(--color-border)]">
@@ -62,7 +63,7 @@ export function DataTable<T>({ columns, data, isLoading, emptyMessage = 'No data
         </thead>
         <tbody>
           {data.map((row, rowIndex) => (
-            <tr key={rowIndex}>
+            <tr key={rowIndex} className={rowClassName ? rowClassName(row) : ''}>
               {columns.map((col, colIndex) => {
                 let value: any = null
                 if (col.accessorKey) {

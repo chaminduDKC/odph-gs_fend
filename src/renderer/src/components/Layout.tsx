@@ -71,7 +71,7 @@ export const Layout: React.FC = () => {
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-border)] no-drag overflow-hidden">
           <div className="flex items-center gap-2 font-bold text-lg text-white overflow-hidden">
-            {!isCollapsed && (
+            {/* {!isCollapsed && (
             <img
               src={Logo}
               alt="logo"
@@ -79,7 +79,7 @@ export const Layout: React.FC = () => {
                 isCollapsed ? 'display-none' : 'w-10 h-10'
               }`}
             />
-            )}
+            )} */}
            
             <span
               className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${
@@ -176,7 +176,7 @@ export const Layout: React.FC = () => {
           </div>
         </header>
         
-        <div className="flex-1 overflow-auto bg-[var(--color-bg-primary)] p-6 no-drag">
+        <div className="flex-1 overflow-auto bg-[var(--color-bg-primary)] p-6 no-drag flex flex-col">
           <Outlet />
         </div>
       </main>

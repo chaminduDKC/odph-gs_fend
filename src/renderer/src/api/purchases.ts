@@ -2,8 +2,10 @@ import { apiClient } from './client'
 import type { PurchaseTransaction, CreatePurchaseRequest, PaginatedResponse } from '@shared/types'
 
 export const purchasesApi = {
-  listPurchases: async (page = 1, pageSize = 12): Promise<PaginatedResponse<PurchaseTransaction>> => {
-    const response = await apiClient.get<PaginatedResponse<PurchaseTransaction>>('/purchases', { params: { page, pageSize } })
+  listPurchases: async (page = 1, pageSize = 12, showDeleted = false): Promise<PaginatedResponse<PurchaseTransaction>> => {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (showDeleted) params.showDeleted = 'true'
+    const response = await apiClient.get<PaginatedResponse<PurchaseTransaction>>('/purchases', { params })
     return response.data
   },
 
@@ -16,18 +18,23 @@ export const purchasesApi = {
     const response = await apiClient.post<PurchaseTransaction>('/purchases', data)
     return response.data
   },
-  deletePurchase: async (id:string): Promise<PurchaseTransaction> => {
+
+  deletePurchase: async (id: string): Promise<PurchaseTransaction> => {
     const response = await apiClient.delete<PurchaseTransaction>(`/purchases/${id}`)
-    // implement delete method
-    ///////////////////////////////////////////////////////////////////////////////////
     return response.data
   },
-  updatePurchase: async (id: string, amount: number, supplierId:string): Promise<PurchaseTransaction> => {
-    console.log(typeof(amount))
-    console.log("Fucking called p.id ", id)
-    console.log("Fucking called s.id ", supplierId)
-    console.log("amount  ", amount)
-    const response = await apiClient.put<PurchaseTransaction>(`/purchases/${id}`, {amountPaid:Number(amount), supplierId:supplierId} )
+
+  restorePurchase: async (id: string): Promise<{ message: string; purchase: PurchaseTransaction }> => {
+    const response = await apiClient.patch<{ message: string; purchase: PurchaseTransaction }>(`/purchases/${id}/restore`)
+    return response.data
+  },
+
+  permanentDeletePurchase: async (id: string): Promise<void> => {
+    await apiClient.delete(`/purchases/${id}/permanent`)
+  },
+
+  updatePurchase: async (id: string, amount: number, supplierId: string): Promise<PurchaseTransaction> => {
+    const response = await apiClient.put<PurchaseTransaction>(`/purchases/${id}`, { amountPaid: Number(amount), supplierId })
     return response.data
   }
 }

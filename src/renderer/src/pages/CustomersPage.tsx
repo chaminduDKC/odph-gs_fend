@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, Edit, Trash2 } from 'lucide-react'
+import { Plus, Eye, Edit, Trash2, Trash, RotateCcw } from 'lucide-react'
 import { customersApi } from '../api/customers'
 import { PageHeader } from '../components/PageHeader'
 import { SearchInput } from '../components/SearchInput'
@@ -18,9 +18,12 @@ export const CustomersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [showDeleted, setShowDeleted] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
 
@@ -30,7 +33,7 @@ export const CustomersPage: React.FC = () => {
     setPhone('')
     setAddress('')
     setIsModalOpen(true)
-  }, isModalOpen || isViewOpen || !!deleteId || !!messageDialog)
+  }, isModalOpen || isViewOpen || !!deleteId || !!restoreId || !!permanentDeleteId || !!messageDialog)
   
   // Form state
   const [name, setName] = useState('')
@@ -39,21 +42,21 @@ export const CustomersPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1)
-  }, [search])
+  }, [search, showDeleted])
 
   const { data: customerData, isLoading } = useQuery({
-    queryKey: ['customers', search, page],
-    queryFn: () => customersApi.listCustomers(search, page)
+    queryKey: ['customers', search, page, showDeleted],
+    queryFn: () => customersApi.listCustomers(search, page, 12, showDeleted)
   })
 
   useEffect(() => {
     if (customerData && page < customerData.totalPages) {
       queryClient.prefetchQuery({
-        queryKey: ['customers', search, page + 1],
-        queryFn: () => customersApi.listCustomers(search, page + 1)
+        queryKey: ['customers', search, page + 1, showDeleted],
+        queryFn: () => customersApi.listCustomers(search, page + 1, 12, showDeleted)
       })
     }
-  }, [customerData, page, search, queryClient])
+  }, [customerData, page, search, showDeleted, queryClient])
 
   const { data: customerVehicles = [], isLoading: loadingVehicles } = useQuery({
     queryKey: ['customerVehicles', editingCustomer?.id],
@@ -90,7 +93,6 @@ export const CustomersPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       setDeleteId(null)
-      //setMessageDialog({ type: 'success', title: 'Deleted', message: 'Customer deleted successfully.' })
     },
     
   onError: (error: unknown) => {
@@ -105,6 +107,36 @@ export const CustomersPage: React.FC = () => {
     
   }
    
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => customersApi.restoreCustomer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      setRestoreId(null)
+      setMessageDialog({ type: 'success', title: 'Restored', message: 'Customer restored successfully.' })
+    },
+    onError: (error: unknown) => {
+      setRestoreId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({ type: 'error', title: 'Cannot Restore', message: error.response?.data.message || 'Failed to restore customer' })
+      }
+    }
+  })
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => customersApi.permanentDeleteCustomer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      setPermanentDeleteId(null)
+      setMessageDialog({ type: 'success', title: 'Permanently Deleted', message: 'Customer permanently deleted.' })
+    },
+    onError: (error: unknown) => {
+      setPermanentDeleteId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({ type: 'error', title: 'Cannot Delete Permanently', message: error.response?.data.message || 'Failed to permanently delete customer' })
+      }
+    }
   })
 
   const handleEdit = (customer: Customer) => {
@@ -143,8 +175,38 @@ export const CustomersPage: React.FC = () => {
     { header: 'Phone', accessorKey: 'phone' },
     { header: 'Address', accessorFn: (row) => row.address || '-' },
     {
+      header: 'Status',
+      cell: ({ row }) => (row as any).isDeleted
+        ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400">Deleted</span>
+        : null
+    },
+    {
       header: 'Actions',
-      cell: ({ row }) => (
+      cell: ({ row }) => (row as any).isDeleted ? (
+        <div className="flex gap-2">
+          <button 
+            className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" 
+            onClick={() => handleView(row)}
+            title="View Details"
+          >
+            <Eye size={16} />
+          </button>
+          <button 
+            className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20" 
+            onClick={() => setRestoreId(row.id)}
+            title="Restore Customer"
+          >
+            <RotateCcw size={16} />
+          </button>
+          <button 
+            className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" 
+            onClick={() => setPermanentDeleteId(row.id)}
+            title="Delete Permanently"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ) : (
         <div className="flex gap-2">
           <button className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" onClick={() => handleView(row)}>
             <Eye size={16} />
@@ -171,17 +233,41 @@ export const CustomersPage: React.FC = () => {
       <PageHeader 
         title="Customers" 
         action={
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={18} /> Add Customer
-          </button>
+          <div className="flex gap-2 items-center">
+            <button
+              className={`btn ${showDeleted ? 'btn-danger' : 'btn-secondary'} flex items-center gap-2`}
+              onClick={() => { setShowDeleted(v => !v); setPage(1) }}
+              title={showDeleted ? 'Viewing deleted customers — click to go back' : 'Show deleted customers'}
+            >
+              <Trash size={16} />
+              {showDeleted ? 'Hide Deleted' : 'Show Deleted'}
+            </button>
+            {!showDeleted && (
+              <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+                <Plus size={18} /> Add Customer
+              </button>
+            )}
+          </div>
         }
       />
+
+      {showDeleted && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <Trash size={14} />
+          Showing deleted customers. These records are soft-deleted and no longer active.
+        </div>
+      )}
 
       <div className="mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name or phone..." />
       </div>
 
-      <DataTable data={customerData?.data ?? []} columns={columns} isLoading={isLoading} />
+      <DataTable
+        data={customerData?.data ?? []}
+        columns={columns}
+        isLoading={isLoading}
+        rowClassName={(row) => (row as any).isDeleted ? 'opacity-60 bg-red-500/5' : ''}
+      />
 
       <Pagination
         page={page}
@@ -209,9 +295,15 @@ export const CustomersPage: React.FC = () => {
         </form>
       </Modal>
 
-      <Modal isOpen={isViewOpen} onClose={closeViewModal} title="Customer Profile" size="lg">
+      <Modal isOpen={isViewOpen} onClose={closeViewModal} title={(editingCustomer as any)?.isDeleted ? "Customer Profile (Deleted)" : "Customer Profile"} size="lg">
         {editingCustomer && (
           <div>
+            {(editingCustomer as any)?.isDeleted && (
+              <div className="mb-4 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+                <Trash size={14} />
+                <span>This customer is deleted.</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <p className="text-sm text-[var(--color-text-secondary)]">Name</p>
@@ -248,8 +340,30 @@ export const CustomersPage: React.FC = () => {
         onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         title="Delete Customer"
-        message="Are you sure you want to delete this customer? This action cannot be undone."
+        message="Are you sure you want to delete this customer? This record will be soft-deleted."
         isLoading={deleteMutation.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={!!restoreId}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => restoreId && restoreMutation.mutate(restoreId)}
+        title="Restore Customer"
+        message="Are you sure you want to restore this customer? This record will become active again."
+        isLoading={restoreMutation.isPending}
+        confirmLabel="Restore"
+        confirmVariant="success"
+      />
+
+      <ConfirmDialog
+        isOpen={!!permanentDeleteId}
+        onClose={() => setPermanentDeleteId(null)}
+        onConfirm={() => permanentDeleteId && permanentDeleteMutation.mutate(permanentDeleteId)}
+        title="Delete Customer Permanently"
+        message="Are you sure you want to permanently delete this customer from the database? This action CANNOT be undone."
+        isLoading={permanentDeleteMutation.isPending}
+        confirmLabel="Delete Permanently"
+        confirmVariant="danger"
       />
     </div>
   )

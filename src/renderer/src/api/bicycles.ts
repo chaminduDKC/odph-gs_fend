@@ -2,9 +2,10 @@ import { apiClient } from './client'
 import type { Bicycle, CreateBicycleRequest, AddBicycleExpenseRequest, SellBicycleRequest, BicycleStatus, PaginatedResponse } from '@shared/types'
 
 export const bicyclesApi = {
-  listBicycles: async (status?: BicycleStatus, page = 1, pageSize = 12): Promise<PaginatedResponse<Bicycle>> => {
+  listBicycles: async (status?: BicycleStatus, page = 1, pageSize = 12, showDeleted = false): Promise<PaginatedResponse<Bicycle>> => {
     const params: Record<string, unknown> = { page, pageSize }
     if (status) params.status = status
+    if (showDeleted) params.showDeleted = 'true'
     const response = await apiClient.get<PaginatedResponse<Bicycle>>('/bicycles', { params })
     return response.data
   },
@@ -28,17 +29,26 @@ export const bicyclesApi = {
     await apiClient.delete(`/bicycles/${id}`)
   },
 
+  restoreBicycle: async (id: string): Promise<{ message: string; bicycle: Bicycle }> => {
+    const response = await apiClient.patch<{ message: string; bicycle: Bicycle }>(`/bicycles/${id}/restore`)
+    return response.data
+  },
+
+  permanentDeleteBicycle: async (id: string): Promise<void> => {
+    await apiClient.delete(`/bicycles/${id}/permanent`)
+  },
+
   addExpense: async (id: string, data: AddBicycleExpenseRequest): Promise<Bicycle> => {
     const response = await apiClient.post<Bicycle>(`/bicycles/${id}/expenses`, data)
     return response.data
   },
+
   addBicyclePart: async (id: string, data: AddBicycleExpenseRequest): Promise<Bicycle> => {
-    console.log(id)
-    console.log(data)
     const response = await apiClient.post<Bicycle>(`/bicycles/${id}/parts`, data)
     return response.data
   },
-  removeBicyclePart: async (id: string, partId:string): Promise<Bicycle> => {
+
+  removeBicyclePart: async (id: string, partId: string): Promise<Bicycle> => {
     const response = await apiClient.delete<Bicycle>(`/bicycles/${id}/parts/${partId}`)
     return response.data
   },

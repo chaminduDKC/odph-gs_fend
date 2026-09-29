@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Trash2, AlertCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, AlertCircle, Trash, RotateCcw } from 'lucide-react'
 import { inventoryApi } from '../api/inventory'
 import { suppliersApi } from '../api/suppliers'
 import { PageHeader } from '../components/PageHeader'
@@ -13,6 +13,7 @@ import { Pagination } from '../components/Pagination'
 import { InventoryItem } from '@shared/types'
 import { MessageDialog } from '@renderer/components/MessageDialog'
 import { useF1Shortcut } from '../hooks/useF1Shortcut'
+import { isAxiosError } from 'axios'
 
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient()
@@ -20,8 +21,11 @@ export const InventoryPage: React.FC = () => {
   const [page, setPage] = useState(1)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null)
   const [showLowStockOnly, setShowLowStockOnly] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
   const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
 
   useF1Shortcut(() => {
@@ -35,7 +39,7 @@ export const InventoryPage: React.FC = () => {
     setReorderLevel('5')
     setSupplierId('')
     setIsModalOpen(true)
-  }, isModalOpen || !!deleteId || !!messageDialog)
+  }, isModalOpen || !!deleteId || !!restoreId || !!permanentDeleteId || !!messageDialog)
 
   // Form State
   const [name, setName] = useState('')
@@ -50,21 +54,21 @@ export const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     setPage(1)
-  }, [search])
+  }, [search, showDeleted])
 
   const { data: inventoryData, isLoading } = useQuery({
-    queryKey: ['inventory', search, page],
-    queryFn: () => inventoryApi.listItems(search, undefined, page)
+    queryKey: ['inventory', search, page, showDeleted],
+    queryFn: () => inventoryApi.listItems(search, undefined, page, 12, showDeleted)
   })
 
   useEffect(() => {
     if (inventoryData && page < inventoryData.totalPages) {
       queryClient.prefetchQuery({
-        queryKey: ['inventory', search, page + 1],
-        queryFn: () => inventoryApi.listItems(search, undefined, page + 1)
+        queryKey: ['inventory', search, page + 1, showDeleted],
+        queryFn: () => inventoryApi.listItems(search, undefined, page + 1, 12, showDeleted)
       })
     }
-  }, [inventoryData, page, search, queryClient])
+  }, [inventoryData, page, search, showDeleted, queryClient])
 
   const { data: suppliers = [] } = useQuery({
     queryKey: ['suppliers', 'all'],
@@ -96,8 +100,42 @@ const deleteMutation = useMutation({
     }
   },
   onError: (error) => {
-    console.log(error)
-    
+    setDeleteId(null)
+    if (isAxiosError(error)) {
+      setMessageDialog({ type: 'error', title: 'Cannot Delete', message: error.response?.data?.message || 'Failed to delete item' })
+    }
+  }
+})
+
+const restoreMutation = useMutation({
+  mutationFn: (id: string) => inventoryApi.restoreItem(id),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    setRestoreId(null)
+    setMessageDialog({ type: 'success', title: 'Restored', message: 'Item restored successfully.' })
+  },
+  onError: (error: unknown) => {
+    setRestoreId(null)
+    if (isAxiosError(error)) {
+      setMessageDialog({ type: 'error', title: 'Cannot Restore', message: error.response?.data?.message || 'Failed to restore item' })
+    }
+  }
+})
+
+const permanentDeleteMutation = useMutation({
+  mutationFn: (id: string) => inventoryApi.permanentDeleteItem(id),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['inventory'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    setPermanentDeleteId(null)
+    setMessageDialog({ type: 'success', title: 'Permanently Deleted', message: 'Item permanently deleted from database.' })
+  },
+  onError: (error: unknown) => {
+    setPermanentDeleteId(null)
+    if (isAxiosError(error)) {
+      setMessageDialog({ type: 'error', title: 'Cannot Delete Permanently', message: error.response?.data?.message || 'Failed to permanently delete item' })
+    }
   }
 })
 
@@ -157,8 +195,31 @@ const deleteMutation = useMutation({
     { header: 'Price', accessorFn: (row) => `Rs. ${Number(row.sellingPrice).toFixed(2)}` },
     { header: 'Reorder At', accessorKey: 'reorderLevel' },
     {
+      header: 'Status',
+      cell: ({ row }) => (row as any).isDeleted
+        ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400">Deleted</span>
+        : null
+    },
+    {
       header: 'Actions',
-      cell: ({ row }) => (
+      cell: ({ row }) => (row as any).isDeleted ? (
+        <div className="flex gap-2">
+          <button 
+            className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20" 
+            onClick={() => setRestoreId(row.id)}
+            title="Restore Item"
+          >
+            <RotateCcw size={16} />
+          </button>
+          <button 
+            className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" 
+            onClick={() => setPermanentDeleteId(row.id)}
+            title="Delete Permanently"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ) : (
         <div className="flex gap-2">
           <button className="p-1.5 bg-amber-500/10 text-amber-500 rounded hover:bg-amber-500/20" onClick={() => handleEdit(row)}>
             <Edit size={16} />
@@ -175,12 +236,25 @@ const deleteMutation = useMutation({
     <div className="animate-fade-in">
       <PageHeader 
         title="Inventory" 
-        // action={
-        //   <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-        //     <Plus size={18} /> Add Item
-        //   </button>
-        // }
+        action={
+          <div className="flex gap-2 items-center">
+            <button
+              className={`btn ${showDeleted ? 'btn-danger' : 'btn-secondary'} flex items-center gap-2`}
+              onClick={() => { setShowDeleted(v => !v); setPage(1) }}
+              title={showDeleted ? 'Viewing deleted — click to go back' : 'Show deleted records'}
+            >
+              <Trash size={16} />
+              {showDeleted ? 'Hide Deleted' : 'Show Deleted'}
+            </button>
+          </div>
+        }
       />
+      {showDeleted && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <Trash size={14} />
+          Showing deleted items. These records are soft-deleted and no longer active.
+        </div>
+      )}
       {messageDialog && (
               <MessageDialog
                 isOpen={true}
@@ -204,7 +278,12 @@ const deleteMutation = useMutation({
         </label>
       </div>
 
-      <DataTable data={displayedItems} columns={columns} isLoading={isLoading} />
+      <DataTable
+        data={displayedItems}
+        columns={columns}
+        isLoading={isLoading}
+        rowClassName={(row) => (row as any).isDeleted ? 'opacity-60 bg-red-500/5' : ''}
+      />
 
       <Pagination
         page={page}
@@ -258,8 +337,30 @@ const deleteMutation = useMutation({
         onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         title="Delete Item"
-        message="Are you sure you want to delete this inventory item? This action cannot be undone."
+        message="Are you sure you want to delete this inventory item? This record will be soft-deleted."
         isLoading={deleteMutation.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={!!restoreId}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => restoreId && restoreMutation.mutate(restoreId)}
+        title="Restore Item"
+        message="Are you sure you want to restore this inventory item? This record will become active again."
+        isLoading={restoreMutation.isPending}
+        confirmLabel="Restore"
+        confirmVariant="success"
+      />
+
+      <ConfirmDialog
+        isOpen={!!permanentDeleteId}
+        onClose={() => setPermanentDeleteId(null)}
+        onConfirm={() => permanentDeleteId && permanentDeleteMutation.mutate(permanentDeleteId)}
+        title="Delete Item Permanently"
+        message="Are you sure you want to permanently delete this inventory item from the database? This action CANNOT be undone."
+        isLoading={permanentDeleteMutation.isPending}
+        confirmLabel="Delete Permanently"
+        confirmVariant="danger"
       />
     </div>
   )

@@ -60,10 +60,10 @@ export const LoginPage: React.FC = () => {
           <div className="flex items-center gap-4 mb-8">
             <div className="w-16 h-16 bg-[var(--color-accent)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--color-accent)]/20">
              
-              <img src={LOGO} alt="logo" className='rounded-xl' />
+              {/* <img src={LOGO} alt="logo" className='rounded-xl' /> */}
             </div>
             <div>
-              <h1 className="text-5xl font-black text-white tracking-tight leading-none">ODPH</h1>
+              <h1 className="text-5xl font-black text-white tracking-tight leading-none">Company Name</h1>
               <p className="mono text-xs tracking-[0.2em] text-[var(--color-text-muted)] uppercase mt-1">
                 Garage Management System
               </p>
@@ -71,7 +71,7 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <h2 className="text-3xl font-bold text-white mb-6 leading-tight">
-            Restore. Shine. Drive<br />
+            Tagline Goes Here<br />
             <span className="text-[var(--color-accent)]">floor to finish.</span>
           </h2>
 
@@ -171,7 +171,7 @@ export const LoginPage: React.FC = () => {
             <div className="mt-8 pt-6 border-t border-[var(--color-border)] flex items-center justify-center gap-2">
               <span className="status-dot status-dot-sm" />
               <span className="mono text-xs text-center text-[var(--color-text-muted)]">
-                ODPH Desktop Client v1.0.0 &copy; {year} Developed By
+                Desktop Client v1.0.0 &copy; {year} Developed By CodeLoom
               </span>
             </div>
           </div>

@@ -2,9 +2,10 @@ import { apiClient } from './client'
 import type { Worker, CreateWorkerRequest, PaginatedResponse } from '@shared/types'
 
 export const workersApi = {
-  listWorkers: async (search?: string, page = 1, pageSize = 12): Promise<PaginatedResponse<Worker>> => {
+  listWorkers: async (search?: string, page = 1, pageSize = 12, showDeleted = false): Promise<PaginatedResponse<Worker>> => {
     const params: Record<string, unknown> = { page, pageSize }
     if (search) params.search = search
+    if (showDeleted) params.showDeleted = 'true'
     const response = await apiClient.get<PaginatedResponse<Worker>>('/workers', { params })
     return response.data
   },
@@ -26,5 +27,14 @@ export const workersApi = {
 
   deleteWorker: async (id: string): Promise<void> => {
     await apiClient.delete(`/workers/${id}`)
+  },
+
+  restoreWorker: async (id: string): Promise<{ message: string; worker: Worker }> => {
+    const response = await apiClient.patch<{ message: string; worker: Worker }>(`/workers/${id}/restore`)
+    return response.data
+  },
+
+  permanentDeleteWorker: async (id: string): Promise<void> => {
+    await apiClient.delete(`/workers/${id}/permanent`)
   }
 }

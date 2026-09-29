@@ -8,7 +8,6 @@ export const salaryApi = {
     return response.data
   },
     getSalaryRecords: async (salaryId: string, month: string): Promise<any> => {
-      console.log("Calling from front", salaryId, month)
     const response = await apiClient.get<any>(`/salary/records/${salaryId}/${month}`)
     return response.data
   },

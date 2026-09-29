@@ -48,6 +48,8 @@ const TYPE_LABELS: Record<LedgerTransactionType, string> = {
   REVERSAL: 'Reversal',
   PARTS_SALE_INCOME: 'Part Sale Income',
   BIKE_SALE_INCOME: 'Bike Sale Income',
+  EXTERNAL_PARTS: 'External Parts (Job)',
+  PARTS_PURCHASE: 'Parts Purchase',
 }
 
 const TYPE_OPTIONS: { value: LedgerTransactionType; label: string; flow: 'IN' | 'OUT' }[] = [
@@ -56,14 +58,15 @@ const TYPE_OPTIONS: { value: LedgerTransactionType; label: string; flow: 'IN' | 
   { value: 'WITHDRAWAL', label: 'Withdraw Cash', flow: 'OUT' },
   { value: 'UTILITY_MACHINE', label: 'Buy Utility Machine', flow: 'OUT' },
   { value: 'EXPENSE', label: 'Other Expense', flow: 'OUT' },
-  { value: 'REPAIR_INCOME', label: 'Repair Income', flow: 'IN' },
-  { value: 'REPAIRED_PARTS_INCOME', label: 'Parts Sale Income', flow: 'IN' },
-  { value: 'INVENTORY_PURCHASES', label: 'Inventory Purchase', flow: 'OUT' },
-  { value: 'BIKE_PURCHASE', label: 'Bike Purchase', flow: 'OUT' },
-  { value: 'SALARY_PAYMENTS', label: 'Salary Payment', flow: 'OUT' },
-  { value: 'REVERSAL', label: 'Reverse', flow: 'OUT' },
-  { value: 'PARTS_SALE_INCOME', label: 'Part Sale', flow: 'IN' },
-  { value: 'BIKE_SALE_INCOME', label: 'Bike Sale', flow: 'IN' },
+  // { value: 'REPAIR_INCOME', label: 'Repair Income', flow: 'IN' },
+  // { value: 'REPAIRED_PARTS_INCOME', label: 'Parts Sale Income', flow: 'IN' },
+  // { value: 'INVENTORY_PURCHASES', label: 'Inventory Purchase', flow: 'OUT' },
+  // { value: 'BIKE_PURCHASE', label: 'Bike Purchase', flow: 'OUT' },
+  // { value: 'SALARY_PAYMENTS', label: 'Salary Payment', flow: 'OUT' },
+  // { value: 'REVERSAL', label: 'Reverse', flow: 'OUT' },
+  // { value: 'PARTS_SALE_INCOME', label: 'Part Sale', flow: 'IN' },
+  // { value: 'BIKE_SALE_INCOME', label: 'Bike Sale', flow: 'IN' },
+  // { value: 'EXTERNAL_PARTS', label: 'External Parts', flow: 'OUT' },
 ]
 
 const EXPENSE_CATEGORIES = [
@@ -101,6 +104,7 @@ function getTypeColor(type: LedgerTransactionType) {
     case 'REVERSAL': return 'bg-red-500/20 text-red-300'
     case 'PARTS_SALE_INCOME': return 'bg-green-500/20 text-green-300'
     case 'BIKE_SALE_INCOME': return 'bg-green-500/20 text-green-300'
+    case 'EXTERNAL_PARTS': return 'bg-orange-500/20 text-orange-300'
     default: return 'bg-gray-500/20 text-gray-300'
   }
 }
@@ -133,6 +137,13 @@ const TYPE_PLACEHOLDERS: Record<LedgerTransactionType, string> = {
   REPAIRED_PARTS_INCOME: 'e.g. Parts used in job #245',
   INVENTORY_PURCHASES: 'e.g. Stock purchase from supplier',
   SALARY_PAYMENTS: 'e.g. August salary — mechanic',
+  EXTERNAL_PARTS: 'e.g. External parts purchased for job',
+  BIKE_PURCHASE: 'e.g. Bike purchase',
+  SUPPLIER_PAYMENT: 'e.g. Payment to supplier',
+  REVERSAL: 'e.g. Entry reversal',
+  PARTS_SALE_INCOME: 'e.g. Counter part sale',
+  BIKE_SALE_INCOME: 'e.g. Bike sold',
+  PARTS_PURCHASE: 'e.g. Parts purchase',
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -256,33 +267,44 @@ export const Ledger: React.FC = () => {
   const totalPages = entriesData ? Math.ceil(entriesData.total / PAGE_SIZE) : 1
 
   return (
-    <div className="animate-fade-in pb-10">
-      <PageHeader
-        title="Cash Ledger"
-        subtitle="Track Garage Cash and Owner Cash flows — starting balance, capital, withdrawals, machines & expenses"
-        action={
-          <button
-            onClick={openCreate}
-            className="btn btn-primary"
-          >
-            <PlusCircle size={16} />
-            Add Transaction
-          </button>
-        }
-      />
+    <div className="animate-fade-in flex-1 min-h-0 flex flex-col">
+      <div className="flex-shrink-0">
+        <PageHeader
+          title="Cash Ledger"
+          subtitle="Track Garage Cash and Owner Cash flows — starting balance, capital, withdrawals, machines & expenses"
+          action={
+            <button
+              onClick={openCreate}
+              className="btn btn-primary"
+            >
+              <PlusCircle size={16} />
+              Add Transaction
+            </button>
+          }
+        />
+      </div>
 
       {/* ── Summary Cards ─────────────────────────────────────────────────── */}
       {summaryLoading ? (
-        <LoadingSpinner />
+        <div className="flex-shrink-0 py-4"><LoadingSpinner /></div>
       ) : summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 flex-shrink-0">
           {/* Garage Cash Balance */}
-          <div className="glass-card rounded-lg p-5">
-            <div className="flex justify-between items-start mb-3">
-              <span className="text-sm text-[var(--color-text-secondary)] font-medium">Garage Cash</span>
-              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400"><Wallet size={20} /></div>
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-sm text-[var(--color-text-secondary)] font-medium">Total Cash Pool</span>
+              <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400"><Wallet size={18} /></div>
             </div>
-            <div className={`text-2xl font-bold mb-1 ${summary.garage.currentBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+             <div className={`text-xl font-bold mb-1 ${summary.totalCashPool >= 0 ? 'text-white' : 'text-red-400'}`}>
+              {fmtMoney(summary.totalCashPool)}
+            </div>
+          </div>
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-sm text-[var(--color-text-secondary)] font-medium">Garage Cash</span>
+              <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400"><Wallet size={18} /></div>
+            </div>
+            <div className={`text-xl font-bold mb-1 ${summary.garage.currentBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
               {fmtMoney(summary.garage.currentBalance)}
             </div>
             <div className="text-xs text-[var(--color-text-secondary)]">
@@ -291,12 +313,12 @@ export const Ledger: React.FC = () => {
           </div>
 
           {/* Owner Cash Balance */}
-          <div className="glass-card rounded-lg p-5">
-            <div className="flex justify-between items-start mb-3">
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex justify-between items-start mb-2">
               <span className="text-sm text-[var(--color-text-secondary)] font-medium">Owner Cash</span>
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><Wallet size={20} /></div>
+              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400"><Wallet size={18} /></div>
             </div>
-            <div className={`text-2xl font-bold mb-1 ${summary.owner.currentBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
+            <div className={`text-xl font-bold mb-1 ${summary.owner.currentBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
               {fmtMoney(summary.owner.currentBalance)}
             </div>
             <div className="text-xs text-[var(--color-text-secondary)]">
@@ -304,23 +326,23 @@ export const Ledger: React.FC = () => {
             </div>
           </div>
 
-          {/* Total Utility Machines */}
-          <div className="glass-card rounded-lg p-5">
-            <div className="flex justify-between items-start mb-3">
+          {/* Total Utility Machines 
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex justify-between items-start mb-2">
               <span className="text-sm text-[var(--color-text-secondary)] font-medium">Utility Machines</span>
-              <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400"><Wrench size={20} /></div>
+              <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400"><Wrench size={18} /></div>
             </div>
-            <div className="text-2xl font-bold text-white mb-1">{fmtMoney(summary.totalUtilityMachines)}</div>
+            <div className="text-xl font-bold text-white mb-1">{fmtMoney(summary.totalUtilityMachines)}</div>
             <div className="text-xs text-[var(--color-text-secondary)]">Total invested in machines</div>
           </div>
-
+          */}
           {/* Total Expenses */}
-          <div className="glass-card rounded-lg p-5">
-            <div className="flex justify-between items-start mb-3">
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex justify-between items-start mb-2">
               <span className="text-sm text-[var(--color-text-secondary)] font-medium">Total Expenses</span>
-              <div className="p-2 rounded-lg bg-red-500/10 text-red-400"><TrendingDown size={20} /></div>
+              <div className="p-1.5 rounded-lg bg-red-500/10 text-red-400"><TrendingDown size={18} /></div>
             </div>
-            <div className="text-2xl font-bold text-white mb-1">{fmtMoney(summary.totalExpenses)}</div>
+            <div className="text-xl font-bold text-white mb-1">{fmtMoney(summary.totalExpenses)}</div>
             <div className="text-xs text-[var(--color-text-secondary)]">
               Withdrawals: {fmtMoney(summary.totalWithdrawals)}
             </div>
@@ -330,40 +352,34 @@ export const Ledger: React.FC = () => {
 
       {/* ── Second row stats ──────────────────────────────────────────────── */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="glass-card rounded-lg p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/10 text-green-400"><TrendingUp size={18} /></div>
-            <div>
-              <p className="text-xs text-[var(--color-text-secondary)]">Total Cash Pool</p>
-              <p className="font-bold text-white">{fmtMoney(summary.totalCashPool)}</p>
-            </div>
-          </div>
-          <div className="glass-card rounded-lg p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400"><DollarSign size={18} /></div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4 flex-shrink-0">
+         
+          {/* <div className="glass-card rounded-lg p-3 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400"><DollarSign size={16} /></div>
             <div>
               <p className="text-xs text-[var(--color-text-secondary)]">Garage Start Balance</p>
-              <p className="font-bold text-white">{fmtMoney(summary.garage.startingBalance)}</p>
+              <p className="font-bold text-white text-sm">{fmtMoney(summary.garage.startingBalance)}</p>
             </div>
           </div>
-          <div className="glass-card rounded-lg p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><DollarSign size={18} /></div>
+          <div className="glass-card rounded-lg p-3 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><DollarSign size={16} /></div>
             <div>
               <p className="text-xs text-[var(--color-text-secondary)]">Owner Start Balance</p>
-              <p className="font-bold text-white">{fmtMoney(summary.owner.startingBalance)}</p>
+              <p className="font-bold text-white text-sm">{fmtMoney(summary.owner.startingBalance)}</p>
             </div>
           </div>
-          <div className="glass-card rounded-lg p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/10 text-green-400"><TrendingUp size={18} /></div>
+          <div className="glass-card rounded-lg p-3 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-500/10 text-green-400"><TrendingUp size={16} /></div>
             <div>
               <p className="text-xs text-[var(--color-text-secondary)]">Total Capital Added</p>
-              <p className="font-bold text-white">{fmtMoney(summary.totalCapital)}</p>
+              <p className="font-bold text-white text-sm">{fmtMoney(summary.totalCapital)}</p>
             </div>
-          </div>
+          </div> */}
         </div>
       )}
 
       {/* ── Filters ───────────────────────────────────────────────────────── */}
-      <div className="glass-card rounded-lg p-4 mb-6 flex flex-wrap gap-3 items-end">
+      <div className="glass-card rounded-lg p-3 mb-4 flex flex-wrap gap-3 items-end flex-shrink-0">
         <div className="flex-1 min-w-40">
           <label className="block text-xs text-[var(--color-text-secondary)] mb-1 font-medium">Account</label>
           <select
@@ -428,30 +444,30 @@ export const Ledger: React.FC = () => {
       </div>
 
       {/* ── Transactions Table ────────────────────────────────────────────── */}
-      <div className="glass-card rounded-lg overflow-hidden">
+      <div className="glass-card rounded-lg overflow-hidden flex-1 min-h-[220px] flex flex-col">
         {entriesLoading ? (
-          <div className="p-8"><LoadingSpinner /></div>
+          <div className="p-8 my-auto"><LoadingSpinner /></div>
         ) : !entriesData || entriesData.data.length === 0 ? (
-          <div className="p-12 text-center text-[var(--color-text-secondary)]">
+          <div className="p-12 text-center text-[var(--color-text-secondary)] my-auto">
             <Wallet size={40} className="mx-auto mb-3 opacity-30" />
             <p className="font-medium">No transactions found</p>
             <p className="text-sm mt-1">Add your first transaction using the button above</p>
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="flex-1 min-h-0 overflow-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--color-border)] bg-white/5">
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Account</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold w-110 text-[var(--color-text-secondary)]">Description</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Category</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Reference</th>
-                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Source</th>
-                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Amount</th>
-                    <th className="text-center py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Actions</th>
+                <thead className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] shadow-sm">
+                  <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Date</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Account</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Type</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold w-110 text-[var(--color-text-secondary)]">Description</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Category</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Reference</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-left py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Source</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-right py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Amount</th>
+                    <th className="sticky top-0 z-10 bg-[var(--color-bg-secondary)] text-center py-3 px-4 font-semibold text-[var(--color-text-secondary)]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -480,24 +496,23 @@ export const Ledger: React.FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         {!entry.sourceModule && (
-
                           <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEdit(entry)}
-                            className="p-1.5 rounded hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors"
-                            title="Edit"
+                            <button
+                              onClick={() => openEdit(entry)}
+                              className="p-1.5 rounded hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-colors"
+                              title="Edit"
                             >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(entry)}
-                            className="p-1.5 rounded hover:bg-red-500/20 text-[var(--color-text-secondary)] hover:text-red-400 transition-colors"
-                            title="Delete"
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(entry)}
+                              className="p-1.5 rounded hover:bg-red-500/20 text-[var(--color-text-secondary)] hover:text-red-400 transition-colors"
+                              title="Delete"
                             >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                          )}
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -507,7 +522,7 @@ export const Ledger: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="p-4 border-t border-[var(--color-border)] flex items-center justify-between text-sm">
+              <div className="p-3 border-t border-[var(--color-border)] flex items-center justify-between text-sm flex-shrink-0 bg-[var(--color-bg-secondary)]">
                 <span className="text-[var(--color-text-secondary)]">
                   Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, entriesData.total)} of {entriesData.total}
                 </span>

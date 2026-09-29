@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, Trash2, Sparkles, Package } from 'lucide-react'
+import { Plus, Eye, Trash2, Sparkles, Package, Trash, RotateCcw } from 'lucide-react'
 import { purchasesApi } from '../api/purchases'
 import { suppliersApi } from '../api/suppliers'
 import { inventoryApi } from '../api/inventory'
@@ -10,8 +10,10 @@ import { Modal } from '../components/Modal'
 import { FormField } from '../components/FormField'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
-import { PurchaseTransaction, PurchaseType } from '@shared/types'
+import { PurchaseTransaction, PurchaseType, Supplier } from '@shared/types'
 import { ConfirmDialog } from '@renderer/components/ConfirmDialog'
+import { MessageDialog } from '@renderer/components/MessageDialog'
+import { isAxiosError } from 'axios'
 import { useF1Shortcut } from '../hooks/useF1Shortcut'
 
 interface PurchaseLineItemState {
@@ -30,20 +32,25 @@ export const PurchasesPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [page, setPage] = useState(1)
+  const [showDeleted, setShowDeleted] = useState(false)
+
+  useEffect(() => {
+    setPage(1)
+  }, [showDeleted])
   
   const { data: purchaseData, isLoading } = useQuery({
-    queryKey: ['purchases', page],
-    queryFn: () => purchasesApi.listPurchases(page)
+    queryKey: ['purchases', page, showDeleted],
+    queryFn: () => purchasesApi.listPurchases(page, 12, showDeleted)
   })
 
   useEffect(() => {
     if (purchaseData && page < purchaseData.totalPages) {
       queryClient.prefetchQuery({
-        queryKey: ['purchases', page + 1],
-        queryFn: () => purchasesApi.listPurchases(page + 1)
+        queryKey: ['purchases', page + 1, showDeleted],
+        queryFn: () => purchasesApi.listPurchases(page + 1, 12, showDeleted)
       })
     }
-  }, [purchaseData, page, queryClient])
+  }, [purchaseData, page, showDeleted, queryClient])
 
   const { data: suppliers = [] } = useQuery({
     queryKey: ['suppliers', 'all'],
@@ -79,11 +86,42 @@ export const PurchasesPage: React.FC = () => {
     return `${year}-${month}-${day}`
   })
   const [deletingId, setDeletingId] = useState('')
+  const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null)
   const [lineItems, setLineItems] = useState<PurchaseLineItemState[]>([])
+
+  // Quick Supplier State
+  const [isCreatingSupplier, setIsCreatingSupplier] = useState(false)
+  const [newSupplierName, setNewSupplierName] = useState('')
+  const [newSupplierContact, setNewSupplierContact] = useState('')
+  const [messageDialog, setMessageDialog] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null)
 
   useF1Shortcut(() => {
     setIsModalOpen(true)
-  }, isModalOpen || isViewOpen || !!deletingId)
+  }, isModalOpen || isViewOpen || !!deletingId || !!restoreId || !!permanentDeleteId || isCreatingSupplier || !!messageDialog)
+
+  const createSupplierMutation = useMutation({
+    mutationFn: (data: { name: string; contact?: string }) => suppliersApi.createSupplier(data),
+    onSuccess: (newSupp) => {
+      queryClient.setQueryData<Supplier[]>(['suppliers', 'all'], (old) => {
+        return old ? [newSupp, ...old] : [newSupp]
+      })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      setSupplierId(newSupp.id)
+      setIsCreatingSupplier(false)
+      setNewSupplierName('')
+      setNewSupplierContact('')
+    },
+    onError: (error: unknown) => {
+      if (isAxiosError(error)) {
+        setMessageDialog({
+          type: 'error',
+          title: 'Failed to Create Supplier',
+          message: error.response?.data?.message || 'Error creating supplier'
+        })
+      }
+    }
+  })
 
   const createMutation = useMutation({
     mutationFn: purchasesApi.createPurchase,
@@ -114,6 +152,50 @@ export const PurchasesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] })
       queryClient.invalidateQueries({ queryKey: ['suppliers'] })
       setDeletingId('')
+    }
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => purchasesApi.restorePurchase(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setRestoreId(null)
+      setMessageDialog({ type: 'success', title: 'Restored', message: 'Purchase transaction restored successfully.' })
+    },
+    onError: (error: unknown) => {
+      setRestoreId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({
+          type: 'error',
+          title: 'Cannot Restore',
+          message: error.response?.data?.message || 'Failed to restore purchase'
+        })
+      }
+    }
+  })
+
+  const permanentDeleteMutation = useMutation({
+    mutationFn: (id: string) => purchasesApi.permanentDeletePurchase(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['purchases'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      setPermanentDeleteId(null)
+      setMessageDialog({ type: 'success', title: 'Permanently Deleted', message: 'Purchase transaction permanently deleted.' })
+    },
+    onError: (error: unknown) => {
+      setPermanentDeleteId(null)
+      if (isAxiosError(error)) {
+        setMessageDialog({
+          type: 'error',
+          title: 'Cannot Delete Permanently',
+          message: error.response?.data?.message || 'Failed to permanently delete purchase'
+        })
+      }
     }
   })
 
@@ -270,6 +352,7 @@ export const PurchasesPage: React.FC = () => {
 
   const handleSubmitUpdate = (e: React.FormEvent) => {
     e.preventDefault()
+    if ((purchase as any)?.isDeleted) return
     updatePaymentMutation.mutate({
       purchaseId: purchaseId,       
       amountToPaid: Number(amountToPaid),
@@ -285,16 +368,34 @@ export const PurchasesPage: React.FC = () => {
     { header: 'Paid', accessorFn: (row) => `Rs. ${Number(row.amountPaid).toFixed(2)}` },
     { header: 'Due', cell: ({ row }) => <span className={Number(row.amountDue) > 0 ? 'text-red-500' : 'text-green-500'}>Rs. {Number(row.amountDue).toFixed(2)}</span> },
     { header: 'Due Date', accessorFn: (row) => row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-LK') : '-' },
-    { header: 'Actions', cell: ({ row }) => (
+    {
+      header: 'Status',
+      cell: ({ row }) => (row as any).isDeleted
+        ? <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-400">Deleted</span>
+        : null
+    },
+    { header: 'Actions', cell: ({ row }) => (row as any).isDeleted ? (
       <div className="flex gap-2">
-        <button className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" onClick={()=> handleEdit(row)}>
+        <button className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" onClick={()=> handleEdit(row)} title="View Details">
           <Eye size={16} />
         </button>
-        <button onClick={()=> setDeletingId(row.id)} className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20">
+        <button className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded hover:bg-emerald-500/20" onClick={()=> setRestoreId(row.id)} title="Restore Purchase">
+          <RotateCcw size={16} />
+        </button>
+        <button className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" onClick={()=> setPermanentDeleteId(row.id)} title="Delete Permanently">
           <Trash2 size={16} />
         </button>
       </div>
-) }
+    ) : (
+      <div className="flex gap-2">
+        <button className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500/20" onClick={()=> handleEdit(row)} title="View Details">
+          <Eye size={16} />
+        </button>
+        <button onClick={()=> setDeletingId(row.id)} className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500/20" title="Delete Purchase">
+          <Trash2 size={16} />
+        </button>
+      </div>
+    ) }
   ]
 
   return (
@@ -302,11 +403,29 @@ export const PurchasesPage: React.FC = () => {
       <PageHeader 
         title="Purchases" 
         action={
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={18} /> New Purchase
-          </button>
+          <div className="flex gap-2 items-center">
+            <button
+              className={`btn ${showDeleted ? 'btn-danger' : 'btn-secondary'} flex items-center gap-2`}
+              onClick={() => { setShowDeleted(v => !v); setPage(1) }}
+              title={showDeleted ? 'Viewing deleted — click to go back' : 'Show deleted records'}
+            >
+              <Trash size={16} />
+              {showDeleted ? 'Hide Deleted' : 'Show Deleted'}
+            </button>
+            {!showDeleted && (
+              <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+                <Plus size={18} /> New Purchase
+              </button>
+            )}
+          </div>
         }
       />
+      {showDeleted && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <Trash size={14} />
+          Showing deleted purchases. These records are soft-deleted and no longer active.
+        </div>
+      )}
       <ConfirmDialog
         isOpen={!!deletingId}
         onClose={()=> setDeletingId("")}
@@ -316,7 +435,35 @@ export const PurchasesPage: React.FC = () => {
         isLoading={deleteMutation.isPending}
        />
 
-      <Modal isOpen={isViewOpen} onClose={closeViewModal} title='Edit Credit Details'>
+      <ConfirmDialog
+        isOpen={!!restoreId}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => restoreId && restoreMutation.mutate(restoreId)}
+        title="Restore Purchase"
+        message="Are you sure you want to restore this purchase record? The transaction and associated inventory items will become active again."
+        isLoading={restoreMutation.isPending}
+        confirmLabel="Restore"
+        confirmVariant="success"
+      />
+
+      <ConfirmDialog
+        isOpen={!!permanentDeleteId}
+        onClose={() => setPermanentDeleteId(null)}
+        onConfirm={() => permanentDeleteId && permanentDeleteMutation.mutate(permanentDeleteId)}
+        title="Delete Purchase Permanently"
+        message="Are you sure you want to permanently delete this purchase record and its purchase items from the database? This action CANNOT be undone."
+        isLoading={permanentDeleteMutation.isPending}
+        confirmLabel="Delete Permanently"
+        confirmVariant="danger"
+      />
+
+      <Modal isOpen={isViewOpen} onClose={closeViewModal} title={(purchase as any)?.isDeleted ? 'View Credit Details (Deleted)' : 'Edit Credit Details'}>
+        {(purchase as any)?.isDeleted && (
+          <div className="mb-4 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <Trash2 size={14} />
+            <span>This purchase is deleted. Details cannot be changed.</span>
+          </div>
+        )}
         <form onSubmit={handleSubmitUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className='text-left'>
@@ -333,12 +480,12 @@ export const PurchasesPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Amount Paid (Rs.)" type="number" required min="0" step="0.01" value={amountPaid} disabled onChange={e => setAmountPaid(e.target.value)} />
-            <FormField label="Add New Payment (Rs.)" type="number" required min="0" disabled={purchase?.amountDue === '0'} max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
+            <FormField label="Add New Payment (Rs.)" type="number" required min="0" disabled={(purchase as any)?.isDeleted || purchase?.amountDue === '0'} max={totalPayment - Number(amountPaid)} step="0.01" value={amountToPaid} onChange={e => setAmountToPaid(e.target.value)} />
           </div>
 
           <div className="flex justify-end items-center gap-4 mt-4 pt-4 border-t border-[var(--color-border)]">
             <button type="button" className="btn btn-secondary ml-4" onClick={closeViewModal}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={totalPayment - Number(amountPaid) < Number(amountToPaid) || purchase?.amountDue === '0' || updatePaymentMutation.isPending}>
+            <button type="submit" className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={(purchase as any)?.isDeleted || totalPayment - Number(amountPaid) < Number(amountToPaid) || purchase?.amountDue === '0' || updatePaymentMutation.isPending}>
               {updatePaymentMutation.isPending ? 'Updating...' : 'Update Purchase'}
             </button>
           </div>
@@ -346,7 +493,12 @@ export const PurchasesPage: React.FC = () => {
           </form>
       </Modal>
 
-      <DataTable data={purchaseData?.data ?? []} columns={columns} isLoading={isLoading} />
+      <DataTable
+        data={purchaseData?.data ?? []}
+        columns={columns}
+        isLoading={isLoading}
+        rowClassName={(row) => (row as any).isDeleted ? 'opacity-60 bg-red-500/5' : ''}
+      />
 
       <Pagination
         page={page}
@@ -365,12 +517,35 @@ export const PurchasesPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField autoFocus label="Supplier" as="select" required value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-              <option value="">Select a supplier...</option>
-              {suppliers.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </FormField>
+            <div className="flex flex-col mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-[var(--color-text-secondary)]">
+                  Supplier <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1 cursor-pointer"
+                  onClick={() => setIsCreatingSupplier(true)}
+                >
+                  <Plus size={14} /> New Supplier
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  autoFocus
+                  required
+                  value={supplierId}
+                  onChange={e => setSupplierId(e.target.value)}
+                  className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] focus:border-[var(--color-accent)] rounded-md px-3 py-2 text-sm text-white transition-colors custom-scrollbar"
+                >
+                  <option value="">Select a supplier...</option>
+                  {suppliers.map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                
+              </div>
+            </div>
             <FormField disabled label="Payment Type" as="select" value={paymentType} onChange={e => setPaymentType(e.target.value as PurchaseType)}>
               <option value="CREDIT">Credit</option>
               <option value="PAID">Full Payment (Paid)</option>
@@ -603,6 +778,79 @@ export const PurchasesPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* New Supplier Quick Modal */}
+      <Modal
+        isOpen={isCreatingSupplier}
+        onClose={() => {
+          setIsCreatingSupplier(false)
+          setNewSupplierName('')
+          setNewSupplierContact('')
+        }}
+        title="Add New Supplier"
+        size="sm"
+        zIndex={60}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (newSupplierName.trim()) {
+              createSupplierMutation.mutate({
+                name: newSupplierName.trim(),
+                contact: newSupplierContact.trim() || undefined
+              })
+            }
+          }}
+          className="space-y-4"
+        >
+          <FormField
+            label="Supplier Name"
+            type="text"
+            required
+            autoFocus
+            placeholder="e.g. Auto Zone Distributors"
+            value={newSupplierName}
+            onChange={e => setNewSupplierName(e.target.value)}
+          />
+          <FormField
+            label="Contact Info / Phone (Optional)"
+            type="text"
+            placeholder="e.g. 0771234567"
+            value={newSupplierContact}
+            onChange={e => setNewSupplierContact(e.target.value)}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setIsCreatingSupplier(false)
+                setNewSupplierName('')
+                setNewSupplierContact('')
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={createSupplierMutation.isPending || !newSupplierName.trim()}
+            >
+              {createSupplierMutation.isPending ? 'Adding...' : 'Save & Select Supplier'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {messageDialog && (
+        <MessageDialog
+          isOpen={true}
+          onClose={() => setMessageDialog(null)}
+          type={messageDialog.type}
+          title={messageDialog.title}
+          message={messageDialog.message}
+        />
+      )}
     </div>
   )
 }

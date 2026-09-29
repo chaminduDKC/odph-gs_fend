@@ -2,9 +2,10 @@ import { apiClient } from './client'
 import type { Job, CreateJobRequest, AddJobPartRequest, JobStatus, PaymentStatus, PaginatedResponse } from '@shared/types'
 
 export const jobsApi = {
-  listJobs: async (status?: JobStatus, page = 1, pageSize = 12): Promise<PaginatedResponse<Job>> => {
+  listJobs: async (status?: JobStatus, page = 1, pageSize = 12, showDeleted = false): Promise<PaginatedResponse<Job>> => {
     const params: Record<string, unknown> = { page, pageSize }
     if (status) params.status = status
+    if (showDeleted) params.showDeleted = 'true'
     const response = await apiClient.get<PaginatedResponse<Job>>('/jobs', { params })
     return response.data
   },
@@ -37,8 +38,18 @@ export const jobsApi = {
   removeJobPart: async (id: string, partId: string): Promise<void> => {
     await apiClient.delete(`/jobs/${id}/parts/${partId}`)
   },
+
   deleteJob: async (id: string): Promise<void> => {
     await apiClient.delete(`/jobs/${id}`)
+  },
+
+  restoreJob: async (id: string): Promise<{ message: string; job: Job }> => {
+    const response = await apiClient.patch<{ message: string; job: Job }>(`/jobs/${id}/restore`)
+    return response.data
+  },
+
+  permanentDeleteJob: async (id: string): Promise<void> => {
+    await apiClient.delete(`/jobs/${id}/permanent`)
   },
 
   downloadInvoice: async (id: string): Promise<Blob> => {
